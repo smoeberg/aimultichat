@@ -3,7 +3,6 @@ declare(strict_types=1);
 require_once __DIR__.'/../bootstrap.php';
 startSecureSession();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!hash_equals($_SESSION['csrf_token'] ?? '', (string)($_POST['csrf'] ?? ''))) { header('Location: login.php?error=login'); exit; }
     (new \Controllers\AuthController())->login();
 }
 ?>

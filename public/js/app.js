@@ -103,7 +103,8 @@ class MultiChatApp {
             
             this.chatList.innerHTML = data.chats.map(chat => `
                 <div class="chat-item ${chat.id === this.chatId ? 'active' : ''}" data-id="${chat.id}">
-                    ${this.escapeHtml(chat.title === 'New chat' ? 'Ny chat' : (chat.title || 'Ny chat'))}
+                    <span class="chat-title">${this.escapeHtml(chat.title === 'New chat' ? 'Ny chat' : (chat.title || 'Ny chat'))}</span>
+                    <button class="delete-chat-btn" type="button" data-delete-id="${chat.id}" aria-label="Slet samtale">×</button>
                 </div>
             `).join('');
             
@@ -112,12 +113,58 @@ class MultiChatApp {
                     this.loadChat(parseInt(item.dataset.id));
                 });
             });
+            this.chatList.querySelectorAll('.delete-chat-btn').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    this.deleteChat(parseInt(button.dataset.deleteId));
+                });
+            });
             
             this.highlightChat(this.chatId);
             
         } catch (error) {
             this.showError('Kunne ikke indlæse chatlisten');
             console.error('Refresh chats error:', error);
+        }
+    }
+
+    async deleteChat(id) {
+        if (!Number.isInteger(id) || id <= 0 || !window.confirm('Vil du slette denne samtale permanent?')) {
+            return;
+        }
+        this.setLoading(true);
+        try {
+            const response = await fetch('?api=delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': this.csrfToken
+                },
+                body: JSON.stringify({chat_id: id}),
+                credentials: 'same-origin'
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.deleted) {
+                this.showError(data.error || 'Samtalen kunne ikke slettes');
+                return;
+            }
+
+            if (this.chatId === id) {
+                this.chatId = 0;
+                this.renderMessages([]);
+            }
+            await this.refreshChats();
+            const firstChat = this.chatList.querySelector('.chat-item');
+            if (this.chatId === 0 && firstChat) {
+                await this.loadChat(parseInt(firstChat.dataset.id));
+            } else if (!firstChat) {
+                await this.createNewChat();
+            }
+        } catch (error) {
+            this.showError('Samtalen kunne ikke slettes');
+            console.error('Delete chat error:', error);
+        } finally {
+            this.setLoading(false);
         }
     }
     

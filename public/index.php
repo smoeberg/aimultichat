@@ -8,10 +8,8 @@ use Models\User;
 use Models\Chat;
 use Models\Bot;
 use Services\SettingsService;
-use Core\Security;
 
 if (isset($_POST['logout'])) {
-    Security::requirePostCsrf();
     (new AuthController())->logout();
 }
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login_username'])) {
@@ -26,8 +24,19 @@ if (isset($_GET['api'])) {
     }
     $user = User::findById((int)$_SESSION['uid']);
     if (!$user) {
+        $_SESSION = [];
+        session_destroy();
         http_response_code(401);
         echo json_encode(['error' => 'Ikke autoriseret']);
+        exit;
+    }
+    $sessionMaxAge = max(300, (int)(configValue('SESSION_MAX_AGE', '28800') ?? 28800));
+    $authenticatedAt = (int)($_SESSION['authenticated_at'] ?? time());
+    if (time() - $authenticatedAt > $sessionMaxAge) {
+        $_SESSION = [];
+        session_destroy();
+        http_response_code(401);
+        echo json_encode(['error' => 'Sessionen er udløbet']);
         exit;
     }
     $api = new ApiController($user);
@@ -45,6 +54,9 @@ if (isset($_GET['api'])) {
         case 'send':
             if ($_SERVER['REQUEST_METHOD'] === 'POST') { $api->sendMessage(); exit; }
             break;
+        case 'delete':
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') { $api->deleteChat(); exit; }
+            break;
     }
     http_response_code(404);
     echo json_encode(['error' => 'Ugyldigt API-endpoint']);
@@ -57,10 +69,20 @@ if (empty($_SESSION['uid'])) {
 }
 $user = User::findById((int)$_SESSION['uid']);
 if (!$user) {
+    $_SESSION = [];
     session_destroy();
-    require __DIR__.'/login.php';
+    header('Location: index.php');
     exit;
 }
+$sessionMaxAge = max(300, (int)(configValue('SESSION_MAX_AGE', '28800') ?? 28800));
+$authenticatedAt = (int)($_SESSION['authenticated_at'] ?? time());
+if (time() - $authenticatedAt > $sessionMaxAge) {
+    $_SESSION = [];
+    session_destroy();
+    header('Location: index.php?expired=1');
+    exit;
+}
+$_SESSION['authenticated_at'] = $authenticatedAt;
 
 $chatId = (int)($_SESSION['cid'] ?? 0);
 $chat = $chatId ? Chat::findById($chatId) : null;
@@ -163,7 +185,7 @@ $csrf = $_SESSION['csrf_token'];
                 </div>
 
                 <div class="input-box-row">
-                    <textarea name="message" maxlength="50000" placeholder="Stil et spørgsmål eller skriv din besked…" required rows="1"></textarea>
+                    <textarea name="message" maxlength="<?= max(1, (int)(configValue('MAX_MESSAGE_CHARS', '20000') ?? 20000)) ?>" placeholder="Stil et spørgsmål eller skriv din besked…" required rows="1"></textarea>
                     <button type="submit" class="btn-send" title="Send besked">
                         <span>Send</span>
                         <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">

@@ -216,11 +216,36 @@ body:not(.login-page) {
     cursor: pointer;
     transition: all 0.15s;
     font-size: 13.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #d1d5db;
+    border: 1px solid transparent;
+}
+
+.chat-title {
+    flex: 1;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: #d1d5db;
-    border: 1px solid transparent;
+}
+
+.delete-chat-btn {
+    flex: 0 0 auto;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    opacity: 0.65;
+}
+
+.delete-chat-btn:hover,
+.delete-chat-btn:focus-visible {
+    opacity: 1;
+    color: #fecaca;
 }
 
 .chat-item:hover {
