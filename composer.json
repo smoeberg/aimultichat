@@ -1,0 +1,30 @@
+{
+  "name": "smoeberg/aimultichat",
+  "description": "Secure multi-provider AI chat client",
+  "type": "project",
+  "license": "GPL-3.0-only",
+  "require": {
+    "php": "^8.1",
+    "ext-curl": "*",
+    "ext-json": "*",
+    "ext-mbstring": "*",
+    "ext-openssl": "*",
+    "ext-pdo": "*",
+    "ext-pdo_mysql": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "Core\\": "src/Core/",
+      "Controllers\\": "src/Controllers/",
+      "Models\\": "src/Models/",
+      "Services\\": "src/Services/"
+    }
+  },
+  "scripts": {
+    "test": "php tests/run.php",
+    "test:integration": "php tests/integration.php"
+  },
+  "config": {
+    "sort-packages": true
+  }
+}

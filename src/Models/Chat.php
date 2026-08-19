@@ -6,59 +6,25 @@ namespace Models;
 use Core\Database;
 use Core\Security;
 use PDO;
-use Throwable;
 
 final class Chat 
 {
     public int $id = 0;
     public int $userId = 0;
     public string $title = '';
-    public string $createdAt = '';
-    public string $updatedAt = '';
 
     /**
      * Finder en chat ud fra dens ID.
      */
     public static function findById(int $id): ?self 
     { 
-        $stmt = Database::getInstance()->prepare('SELECT * FROM conversations WHERE id = ? LIMIT 1'); 
+        $stmt = Database::getInstance()->prepare(
+            'SELECT id, user_id, title FROM conversations WHERE id = ? LIMIT 1'
+        );
         $stmt->execute([$id]); 
         $data = $stmt->fetch(PDO::FETCH_ASSOC); 
         
         return $data ? self::from($data) : null; 
-    }
-
-    /**
-     * Henter alle samtaler for en bestemt bruger (sorteret efter senest opdateret).
-     *
-     * @return self[]
-     */
-    public static function findAllForUser(int $userId): array
-    {
-        $stmt = Database::getInstance()->prepare('
-            SELECT * FROM conversations 
-            WHERE user_id = ? 
-            ORDER BY updated_at DESC, id DESC
-        ');
-        $stmt->execute([$userId]);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $chats = [];
-        foreach ($rows as $row) {
-            $chats[] = self::from($row);
-        }
-
-        return $chats;
-    }
-
-    /**
-     * Alias for findAllForUser for bagudkompatibilitet.
-     *
-     * @return self[]
-     */
-    public static function forUser(int $userId): array
-    {
-        return self::findAllForUser($userId);
     }
 
     /**
@@ -70,7 +36,7 @@ final class Chat
         $title = trim($title) !== '' ? mb_substr(trim($title), 0, 80) : 'Ny chat';
 
         $stmt = $db->prepare('INSERT INTO conversations (user_id, title) VALUES (?, ?)');
-        $stmt->execute([$userId, $title]);
+        $stmt->execute([$userId, Security::encryptIfConfigured($title)]);
 
         $id = (int)$db->lastInsertId();
         $chat = self::findById($id);
@@ -91,10 +57,8 @@ final class Chat
         $c->id = (int)($d['id'] ?? 0);
         $c->userId = (int)($d['user_id'] ?? $d['userId'] ?? 0);
         $c->title = (string)($d['title'] ?? '');
-        $c->createdAt = (string)($d['created_at'] ?? $d['createdAt'] ?? '');
-        $c->updatedAt = (string)($d['updated_at'] ?? $d['updatedAt'] ?? '');
-        
-        return $c; 
+
+        return $c;
     }
 
     /**
@@ -103,20 +67,15 @@ final class Chat
      */
     public function getTitle(): string
     {
-        if ($this->title === '') {
+        return self::decodeTitle($this->title);
+    }
+
+    public static function decodeTitle(string $title): string
+    {
+        if ($title === '') {
             return 'Ny chat';
         }
-
-        try {
-            $res = Security::decryptWithStatus($this->title);
-            if ($res['data'] !== null && $res['data'] !== '') {
-                return $res['data'];
-            }
-        } catch (Throwable $e) {
-            // Fejl i dekryptering ignoreres og falder tilbage på rå tekst
-        }
-
-        return $this->title;
+        return Security::decryptOrPlaintext($title) ?: 'Ny chat';
     }
 
     /**
@@ -127,60 +86,50 @@ final class Chat
         return Message::forChat($this->id, $limit); 
     }
 
-    /**
-     * Tilføjer en besked til chatten og opdaterer oprettelsestidspunktet.
-     */
-    public function addMessage(string $role, string $content, ?int $botId = null): void 
-    { 
-        $db = Database::getInstance();
-        $s = $db->prepare('INSERT INTO messages(conversation_id, role, content, bot_id) VALUES(?, ?, ?, ?)');
-        $s->execute([$this->id, $role, $content, $botId]);
-        
-        $db->prepare('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?')->execute([$this->id]); 
-    }
+    public function addExchange(
+        string $userContent,
+        string $assistantContent,
+        ?int $botId,
+        ?string $newTitle = null
+    ): void {
+        $database = Database::getInstance();
+        $database->beginTransaction();
+        try {
+            $insert = $database->prepare(
+                'INSERT INTO messages(conversation_id, role, content, bot_id) VALUES(?, ?, ?, ?)'
+            );
+            $insert->execute([
+                $this->id,
+                'user',
+                Security::encryptIfConfigured($userContent),
+                null,
+            ]);
+            $insert->execute([
+                $this->id,
+                'assistant',
+                Security::encryptIfConfigured($assistantContent),
+                $botId,
+            ]);
 
-    /**
-     * Hjælpemetode til at tilføje systembeskeder.
-     */
-    public function addSystemMessage(string $content, ?int $botId = null): void 
-    { 
-        $this->addMessage('system', $content, $botId); 
-    }
-
-    /**
-     * Henter ID på den senest benyttede bot i chatten.
-     */
-    public function getLastBotId(): ?int 
-    { 
-        $s = Database::getInstance()->prepare("
-            SELECT bot_id 
-            FROM messages 
-            WHERE conversation_id = ? AND bot_id IS NOT NULL 
-            ORDER BY id DESC 
-            LIMIT 1
-        ");
-        $s->execute([$this->id]);
-        $v = $s->fetchColumn();
-        
-        return $v === false ? null : (int)$v; 
-    }
-
-    /**
-     * Opdaterer titlen på chatten.
-     */
-    public function updateTitle(string $title): void 
-    { 
-        $title = trim($title); 
-        if ($title === '') {
-            $title = 'Ny chat';
+            if ($newTitle !== null && trim($newTitle) !== '') {
+                $cleanTitle = mb_substr(trim($newTitle), 0, 80);
+                $storedTitle = Security::encryptIfConfigured($cleanTitle);
+                $database->prepare(
+                    'UPDATE conversations SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+                )->execute([$storedTitle, $this->id]);
+                $this->title = $storedTitle;
+            } else {
+                $database->prepare(
+                    'UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+                )->execute([$this->id]);
+            }
+            $database->commit();
+        } catch (\Throwable $exception) {
+            if ($database->inTransaction()) {
+                $database->rollBack();
+            }
+            throw $exception;
         }
-        
-        $cleanTitle = mb_substr($title, 0, 80);
-        
-        $db = Database::getInstance();
-        $db->prepare('UPDATE conversations SET title = ? WHERE id = ?')->execute([$cleanTitle, $this->id]);
-        
-        $this->title = $cleanTitle; 
     }
 
     /**
@@ -188,26 +137,7 @@ final class Chat
      */
     public function delete(): void
     {
-        $db = Database::getInstance();
-        $db->prepare('DELETE FROM messages WHERE conversation_id = ?')->execute([$this->id]);
-        $db->prepare('DELETE FROM conversations WHERE id = ?')->execute([$this->id]);
+        Database::getInstance()->prepare('DELETE FROM conversations WHERE id = ?')->execute([$this->id]);
     }
 
-    /**
-     * Magic getter for bagudkompatibilitet med snake_case egenskaber.
-     */
-    public function __get(string $name): mixed
-    {
-        return match ($name) {
-            'user_id' => $this->userId,
-            'created_at' => $this->createdAt,
-            'updated_at' => $this->updatedAt,
-            default => null,
-        };
-    }
-
-    public function __isset(string $name): bool
-    {
-        return in_array($name, ['user_id', 'created_at', 'updated_at'], true);
-    }
 }

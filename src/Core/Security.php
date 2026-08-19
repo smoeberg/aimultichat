@@ -6,12 +6,10 @@ namespace Core;
 use RuntimeException;
 use InvalidArgumentException;
 
-final class Security 
+final class Security
 {
-    public static function generateSessionToken(): string 
-    { 
-        return bin2hex(random_bytes(32)); 
-    }
+    public const MIN_PASSWORD_LENGTH = 12;
+    private const ENCRYPTED_PREFIX = 'enc:v1:';
 
     /**
      * Krypterer data med den primære ENCRYPTION_KEY (AES-256-GCM).
@@ -31,7 +29,7 @@ final class Security
             throw new RuntimeException('Kryptering mislykkedes.');
         }
 
-        return base64_encode($iv . $tag . $ct); 
+        return self::ENCRYPTED_PREFIX . base64_encode($iv . $tag . $ct);
     }
 
     /**
@@ -65,6 +63,10 @@ final class Security
         $data = trim($data);
         if ($data === '') {
             return ['data' => '', 'status' => 'MISSING'];
+        }
+
+        if (str_starts_with($data, self::ENCRYPTED_PREFIX)) {
+            $data = substr($data, strlen(self::ENCRYPTED_PREFIX));
         }
 
         $raw = base64_decode($data, true);
@@ -118,22 +120,31 @@ final class Security
         return hash('sha256', $val, true);
     }
 
-    public static function hashPassword(string $p): string 
-    { 
-        if (strlen($p) < 6) {
-            throw new InvalidArgumentException('Adgangskoden skal være mindst 6 tegn.');
+    public static function hashPassword(string $p): string
+    {
+        if (mb_strlen($p) < self::MIN_PASSWORD_LENGTH) {
+            throw new InvalidArgumentException('Adgangskoden skal være mindst 12 tegn.');
         }
-        return password_hash($p, PASSWORD_ARGON2ID); 
+        $hash = password_hash($p, self::passwordAlgorithm());
+        if (!is_string($hash)) {
+            throw new RuntimeException('Adgangskoden kunne ikke hashes sikkert.');
+        }
+        return $hash;
     }
 
-    public static function verifyPassword(string $p, string $h): bool 
+    public static function verifyPassword(string $p, string $h): bool
     {
         return $h !== '' && password_verify($p, $h);
     }
 
-    public static function sanitizeInput(string $s): string 
-    { 
-        return trim($s); 
+    public static function passwordNeedsRehash(string $hash): bool
+    {
+        return $hash !== '' && password_needs_rehash($hash, self::passwordAlgorithm());
+    }
+
+    private static function passwordAlgorithm(): string
+    {
+        return defined('PASSWORD_ARGON2ID') ? (string)constant('PASSWORD_ARGON2ID') : PASSWORD_DEFAULT;
     }
 
     public static function validateCsrf(string $token): bool 
@@ -148,17 +159,69 @@ final class Security
         } 
     }
 
-    public static function requireCsrfHeader(): void 
+    public static function requireCsrfHeader(): void
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            return;
+            throw new RuntimeException('Ugyldig forespørgselsmetode', 405);
         }
 
-        $headers = array_change_key_case(getallheaders() ?: [], CASE_LOWER);
-        $token = $headers['x-csrf-token'] ?? $_POST['csrf'] ?? '';
+        $headers = function_exists('getallheaders') ? (getallheaders() ?: []) : [];
+        $headers = array_change_key_case($headers, CASE_LOWER);
+        $token = $headers['x-csrf-token']
+            ?? $_SERVER['HTTP_X_CSRF_TOKEN']
+            ?? $_POST['csrf']
+            ?? '';
 
         if (!self::validateCsrf((string)$token)) {
             throw new RuntimeException('Ugyldigt CSRF token', 403);
         }
+    }
+
+    public static function encryptIfConfigured(string $data): string
+    {
+        if (self::getKeyBytes('ENCRYPTION_KEY') === null) {
+            if (\configValue('APP_ENV', 'production') === 'production') {
+                throw new RuntimeException('ENCRYPTION_KEY mangler i produktionskonfigurationen.');
+            }
+            return $data;
+        }
+        return self::encrypt($data);
+    }
+
+    public static function decryptOrPlaintext(mixed $data): string
+    {
+        if (is_resource($data)) {
+            $data = stream_get_contents($data);
+        }
+        $value = (string)($data ?? '');
+        if ($value === '') {
+            return '';
+        }
+
+        $result = self::decryptWithStatus($value);
+        if ($result['data'] !== null) {
+            return $result['data'];
+        }
+        if (str_starts_with(trim($value), self::ENCRYPTED_PREFIX)) {
+            throw new RuntimeException('Krypterede data kunne ikke dekrypteres med den konfigurerede nøgle.');
+        }
+        return $value;
+    }
+
+    public static function isVersionedEncryptedValue(mixed $data): bool
+    {
+        if (is_resource($data)) {
+            $data = stream_get_contents($data);
+        }
+        return str_starts_with(trim((string)($data ?? '')), self::ENCRYPTED_PREFIX);
+    }
+
+    public static function looksLikeLegacyEncryptedValue(mixed $data): bool
+    {
+        if (is_resource($data)) {
+            $data = stream_get_contents($data);
+        }
+        $raw = base64_decode(trim((string)($data ?? '')), true);
+        return is_string($raw) && strlen($raw) >= 28;
     }
 }

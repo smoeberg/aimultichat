@@ -7,7 +7,9 @@ use Models\User;
 use Models\Bot;
 use Core\Security;
 use Core\Database;
+use Core\Logger;
 use Services\SettingsService;
+use Services\GitHubService;
 
 if (empty($_SESSION['uid'])) {
     header('Location: index.php');
@@ -19,10 +21,21 @@ if (!$user || $user->role !== 'admin') {
     http_response_code(403);
     exit('Adgang nægtet. Kun administratorer har adgang til denne side.');
 }
+$sessionMaxAge = max(300, (int)(configValue('SESSION_MAX_AGE', '28800') ?? 28800));
+$authenticatedAt = (int)($_SESSION['authenticated_at'] ?? time());
+if (time() - $authenticatedAt > $sessionMaxAge) {
+    $_SESSION = [];
+    session_destroy();
+    header('Location: index.php?expired=1');
+    exit;
+}
+$_SESSION['authenticated_at'] = $authenticatedAt;
 
 $error = '';
 $success = '';
-$activeTab = $_GET['tab'] ?? 'bots';
+$activeTab = in_array($_GET['tab'] ?? 'bots', ['bots', 'users', 'github'], true)
+    ? (string)$_GET['tab']
+    : 'bots';
 
 // Handlinger for Brugere og Bots
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -40,11 +53,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $password = (string)($_POST['password'] ?? '');
             $role = ($_POST['role'] ?? 'user') === 'admin' ? 'admin' : 'user';
 
-            if ($username === '' || $name === '' || strlen($password) < 6) {
-                throw new RuntimeException('Brugernavn, Navn og en adgangskode på mindst 6 tegn er påkrævet.');
+            if (!preg_match('/^[A-Za-z0-9_.@-]{3,100}$/', $username)
+                || $name === ''
+                || mb_strlen($name) > 100
+                || mb_strlen($password) < Security::MIN_PASSWORD_LENGTH) {
+                throw new RuntimeException('Gyldigt brugernavn, navn og en adgangskode på mindst 12 tegn er påkrævet.');
             }
 
-            if (User::findByUsername($username)) {
+            if (User::findAnyByUsername($username)) {
                 throw new RuntimeException('Brugernavnet optaget. Vælg venligst et andet.');
             }
 
@@ -58,24 +74,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } 
         elseif ($action === 'update_user') {
             $userId = (int)($_POST['user_id'] ?? 0);
-            $u = User::findById($userId);
-            if (!$u) throw new RuntimeException('Bruger blev ikke fundet.');
-
             $role = ($_POST['role'] ?? 'user') === 'admin' ? 'admin' : 'user';
             $enabled = isset($_POST['enabled']) ? 1 : 0;
             $newPassword = (string)($_POST['new_password'] ?? '');
-
             $db = Database::getInstance();
-            if (strlen($newPassword) >= 6) {
-                $hash = Security::hashPassword($newPassword);
-                $stmt = $db->prepare('UPDATE users SET role = ?, enabled = ?, password_hash = ? WHERE id = ?');
-                $stmt->execute([$role, $enabled, $hash, $userId]);
-                $success = "Bruger '{$u->username}' opdateret inkl. ny adgangskode!";
-            } else {
-                $stmt = $db->prepare('UPDATE users SET role = ?, enabled = ? WHERE id = ?');
-                $stmt->execute([$role, $enabled, $userId]);
-                $success = "Bruger '{$u->username}' opdateret!";
+            if ($newPassword !== '' && mb_strlen($newPassword) < Security::MIN_PASSWORD_LENGTH) {
+                throw new RuntimeException('En ny adgangskode skal være mindst 12 tegn.');
             }
+
+            $db->beginTransaction();
+            try {
+                $targetStatement = $db->prepare(
+                    'SELECT id, username, role, enabled FROM users WHERE id = ? FOR UPDATE'
+                );
+                $targetStatement->execute([$userId]);
+                $target = $targetStatement->fetch(PDO::FETCH_ASSOC);
+                if (!$target) {
+                    throw new RuntimeException('Bruger blev ikke fundet.');
+                }
+
+                $activeAdmins = $db->query(
+                    "SELECT id FROM users WHERE role = 'admin' AND enabled = 1 FOR UPDATE"
+                )->fetchAll(PDO::FETCH_COLUMN);
+                if (($role !== 'admin' || $enabled !== 1)
+                    && $target['role'] === 'admin'
+                    && (int)$target['enabled'] === 1
+                    && count($activeAdmins) <= 1) {
+                    throw new RuntimeException('Den sidste aktive administrator kan ikke deaktiveres eller degraderes.');
+                }
+
+                if ($newPassword !== '') {
+                    $hash = Security::hashPassword($newPassword);
+                    $stmt = $db->prepare('UPDATE users SET role = ?, enabled = ?, password_hash = ? WHERE id = ?');
+                    $stmt->execute([$role, $enabled, $hash, $userId]);
+                } else {
+                    $stmt = $db->prepare('UPDATE users SET role = ?, enabled = ? WHERE id = ?');
+                    $stmt->execute([$role, $enabled, $userId]);
+                }
+                $db->commit();
+            } catch (\Throwable $exception) {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
+                throw $exception;
+            }
+            $username = (string)($target['username'] ?? 'ukendt');
+            $success = $newPassword !== ''
+                ? "Bruger '{$username}' opdateret inkl. ny adgangskode!"
+                : "Bruger '{$username}' opdateret!";
             $activeTab = 'users';
         }
 
@@ -84,10 +130,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $githubUser = trim((string)($_POST['github_username'] ?? ''));
             $githubToken = trim((string)($_POST['github_token'] ?? ''));
             $clearToken = isset($_POST['clear_github_token']);
-            if ($githubUser === '') {
-                throw new RuntimeException('Indtast den GitHub-bruger/ejer, som forbindelsen hører til.');
+            $rawAllowed = preg_split('/[\r\n,]+/', (string)($_POST['github_allowed_repositories'] ?? '')) ?: [];
+            $allowed = [];
+            $githubService = new GitHubService();
+            foreach (array_filter(array_map('trim', $rawAllowed)) as $repository) {
+                $url = str_starts_with($repository, 'https://')
+                    ? $repository
+                    : 'https://github.com/' . $repository;
+                $allowed[] = $githubService->repositoryFullName($url);
+            }
+            if (!preg_match('/^[A-Za-z0-9_.-]{1,100}$/', $githubUser)) {
+                throw new RuntimeException('Indtast en gyldig GitHub-bruger/ejer.');
+            }
+            if (count($allowed) > 100) {
+                throw new RuntimeException('Der kan højst godkendes 100 repositories.');
+            }
+            if (strlen($githubToken) > 1000
+                || str_contains($githubToken, "\r")
+                || str_contains($githubToken, "\n")) {
+                throw new RuntimeException('GitHub-tokenet indeholder ugyldige tegn eller er for langt.');
             }
             SettingsService::put('github_username', $githubUser);
+            SettingsService::put('github_allowed_repositories', implode("\n", array_values(array_unique($allowed))));
             if ($clearToken) {
                 SettingsService::put('github_token', '');
             } elseif ($githubToken !== '') {
@@ -100,6 +164,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // --- STANDARD MODEL / DEFAULT BOT ---
         elseif ($action === 'save_default_bot') {
             $defaultBotKey = trim((string)($_POST['default_bot'] ?? ''));
+            $defaultBot = Bot::findByKey($defaultBotKey);
+            if ($defaultBot === null || !$defaultBot->enabled || !$defaultBot->isConfigured()) {
+                throw new RuntimeException('Standardbotten skal være aktiv og korrekt konfigureret.');
+            }
             SettingsService::put('default_bot', $defaultBotKey);
             $success = 'Standard AI-model for brugere blev opdateret!';
             $activeTab = 'bots';
@@ -133,13 +201,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($provider === 'gpai') {
                 $gpaiUser = trim((string)($_POST['gpai_username'] ?? ''));
                 $gpaiPass = (string)($_POST['gpai_password'] ?? '');
+                $existing = Bot::findByKey($botKey);
+                $existingConfig = $existing
+                    ? (json_decode($existing->getDecryptedConfig() ?? '{}', true) ?: [])
+                    : [];
+                $effectiveUser = $gpaiUser !== '' ? $gpaiUser : (string)($existingConfig['username'] ?? '');
+                $effectivePass = $gpaiPass !== '' ? $gpaiPass : (string)($existingConfig['password'] ?? '');
 
-                if ($gpaiUser !== '' || $gpaiPass !== '') {
-                    $configObj = ['username' => $gpaiUser, 'password' => $gpaiPass];
-                    $data['config_json'] = json_encode($configObj);
-                    if ($gpaiPass !== '') {
-                        $data['api_key'] = $gpaiPass;
-                    }
+                if ($effectiveUser !== '' || $effectivePass !== '') {
+                    $data['config_json'] = json_encode(
+                        ['username' => $effectiveUser, 'password' => $effectivePass],
+                        JSON_THROW_ON_ERROR
+                    );
+                }
+                if ($gpaiPass !== '') {
+                    $data['api_key'] = $gpaiPass;
                 }
             } else {
                 if ($apiKey !== '') {
@@ -151,8 +227,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $success = "Bot-konfigurationen for '$name' blev gemt succesfuldt!";
             $activeTab = 'bots';
         }
+        if ($success !== '') {
+            Logger::info('Admin action completed', [
+                'admin_id' => $user->id,
+                'action' => (string)$action,
+            ]);
+        }
     } catch (\Throwable $e) {
-        $error = $e->getMessage();
+        $requestId = bin2hex(random_bytes(8));
+        Logger::error('Admin action failed', [
+            'request_id' => $requestId,
+            'admin_id' => $user->id,
+            'action' => (string)($_POST['action'] ?? ''),
+            'type' => get_class($e),
+        ]);
+        $error = $e instanceof RuntimeException && !$e instanceof PDOException
+            ? $e->getMessage()
+            : "Handlingen mislykkedes. Reference: {$requestId}";
     }
 }
 
@@ -285,11 +376,15 @@ function toggleProviderFields(selectElem, prefix) {
   <?php if ($activeTab === 'github'): ?>
     <h2>🐙 GitHub-forbindelse</h2>
     <div class="card">
-      <p><strong>Ja — det er den rigtige løsning.</strong> Multi-Chat bør have en central GitHub-forbindelse i Admin, så du ikke skal sende en token med hver chat. Det gør det muligt at læse både offentlige og private repositories, når GitHub-tokenet har den nødvendige adgang.</p>
+      <p>Multi-Chat kan bruge en central GitHub-forbindelse uden at sende en token med hver chat. Kun repositories på allowlisten nedenfor kan læses, og tokenet bør have mindst mulige, read-only rettigheder.</p>
       <div style="background:#fff7ed;border:1px solid #fed7aa;padding:12px;border-radius:6px;margin-bottom:15px;">
         <strong>🔐 Sikkerhed:</strong> Tokenet krypteres før det gemmes i databasen. Vi gemmer ikke GitHub-adgangskoden. Brug en GitHub <strong>Fine-grained Personal Access Token</strong> med mindst <strong>Contents: Read-only</strong> på de repositories Multi-Chat skal kunne læse.
       </div>
-      <?php $githubUsername = SettingsService::get('github_username', ''); $githubConfigured = SettingsService::getSecret('github_token') !== null; ?>
+      <?php
+        $githubUsername = SettingsService::get('github_username', '');
+        $githubConfigured = SettingsService::getSecret('github_token') !== null;
+        $githubAllowedRepositories = implode("\n", SettingsService::getList('github_allowed_repositories'));
+      ?>
       <form method="post">
         <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
         <input type="hidden" name="action" value="save_github">
@@ -305,6 +400,11 @@ function toggleProviderFields(selectElem, prefix) {
           <div class="full-width">
             <label>GitHub Fine-grained Personal Access Token</label>
             <input type="password" name="github_token" placeholder="<?= $githubConfigured ? '•••••••• (skriv kun hvis token skal ændres)' : 'ghp_... / github_pat_...' ?>" autocomplete="new-password">
+          </div>
+          <div class="full-width">
+            <label>Godkendte repositories (ét ejer/repository pr. linje)</label>
+            <textarea name="github_allowed_repositories" rows="6" placeholder="smoeberg/aimultichat"><?= htmlspecialchars($githubAllowedRepositories, ENT_QUOTES, 'UTF-8') ?></textarea>
+            <small>Kun repositories på denne liste kan læses gennem chatten, også selv om tokenet har bredere adgang.</small>
           </div>
           <div class="full-width">
             <label><input type="checkbox" name="clear_github_token" value="1"> Fjern gemt GitHub-token</label>
@@ -335,8 +435,8 @@ function toggleProviderFields(selectElem, prefix) {
             <input type="text" name="name" required placeholder="f.eks. Jens Jensen">
           </div>
           <div>
-            <label>Adgangskode (min. 6 tegn)</label>
-            <input type="password" name="password" required minlength="6">
+            <label>Adgangskode (min. 12 tegn)</label>
+            <input type="password" name="password" required minlength="12">
           </div>
           <div>
             <label>Rolle</label>
@@ -389,7 +489,7 @@ function toggleProviderFields(selectElem, prefix) {
                     </div>
                     <div>
                       <label>Nulstil adgangskode (valgfrit)</label>
-                      <input type="password" name="new_password" placeholder="Skriv ny adgangskode" minlength="6">
+                      <input type="password" name="new_password" placeholder="Skriv ny adgangskode" minlength="12">
                     </div>
                     <div class="full-width">
                       <label><input type="checkbox" name="enabled" value="1" <?= $u['enabled']?'checked':'' ?>> Bruger er aktiv</label>

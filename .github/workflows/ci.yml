@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: multichat_test
+          MYSQL_USER: multichat
+          MYSQL_PASSWORD: multichat-test
+          MYSQL_ROOT_PASSWORD: root-test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -umultichat -pmultichat-test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: multichat_test
+      DB_USER: multichat
+      DB_PASSWORD: multichat-test
+      ENCRYPTION_KEY: abababababababababababababababababababababababababababababababab
+      PROVIDER_ALLOW_PRIVATE_NETWORKS: true
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.1', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: curl, json, mbstring, openssl, pdo_mysql
+          coverage: none
+      - name: Validate Composer metadata
+        run: composer validate --strict --no-check-publish
+      - name: PHP syntax
+        run: find . -path ./vendor -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Unit and hygiene tests
+        run: php tests/run.php
+      - name: Database integration tests
+        run: php tests/integration.php
+      - name: JavaScript syntax
+        run: node --check public/js/app.js

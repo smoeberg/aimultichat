@@ -7,6 +7,7 @@ use Core\Database;
 use Core\Security;
 use PDO;
 use RuntimeException;
+use Services\HttpJsonClient;
 
 final class Bot
 {
@@ -31,7 +32,7 @@ final class Bot
             $this->id = (int)($data['id'] ?? 0);
             $this->botKey = (string)($data['bot_key'] ?? '');
             $this->name = (string)($data['name'] ?? '');
-            $this->provider = (string)($data['provider'] ?? 'openai');
+            $this->provider = strtolower((string)($data['provider'] ?? 'openai'));
             $this->endpoint = (string)($data['endpoint'] ?? '');
             $this->model = (string)($data['model'] ?? '');
 
@@ -62,12 +63,9 @@ final class Bot
             'bot_key' => $this->botKey,
             'name' => $this->name,
             'provider' => $this->provider,
-            'endpoint' => $this->endpoint,
             'model' => $this->model,
-            'system_prompt' => $this->systemPrompt,
             'enabled' => $this->enabled,
             'is_configured' => $this->isConfigured(),
-            'key_status' => $this->getKeyStatus(),
         ];
     }
 
@@ -116,21 +114,33 @@ final class Bot
         $db = Database::getInstance();
         $botKey = trim((string)($data['bot_key'] ?? ''));
 
-        if ($botKey === '') {
-            throw new RuntimeException('Bot-nøgle (bot_key) må ikke være tom.');
+        if (!preg_match('/^[a-z0-9][a-z0-9_.-]{0,63}$/i', $botKey)) {
+            throw new RuntimeException('Bot-nøglen har et ugyldigt format.');
         }
 
         $existing = self::findByKey($botKey);
 
         $apiKeyEncrypted = $existing ? $existing->apiKeyEncrypted : null;
         if (!empty($data['api_key'])) {
-            $apiKeyEncrypted = Security::encrypt((string)$data['api_key']);
+            $rawApiKey = (string)$data['api_key'];
+            if (strlen($rawApiKey) > 10000 || str_contains($rawApiKey, "\r") || str_contains($rawApiKey, "\n")) {
+                throw new RuntimeException('Provider-nøglen indeholder ugyldige tegn eller er for lang.');
+            }
+            $apiKeyEncrypted = Security::encrypt($rawApiKey);
         }
 
         $configEncrypted = $existing ? $existing->configJsonEncrypted : null;
         if (array_key_exists('config_json', $data)) {
             $rawConfig = (string)($data['config_json'] ?? '');
             if ($rawConfig !== '') {
+                if (strlen($rawConfig) > 20000) {
+                    throw new RuntimeException('Provider-konfigurationen er for lang.');
+                }
+                try {
+                    json_decode($rawConfig, true, 32, JSON_THROW_ON_ERROR);
+                } catch (\JsonException $exception) {
+                    throw new RuntimeException('Provider-konfigurationen indeholder ugyldig JSON.', 0, $exception);
+                }
                 $configEncrypted = Security::encrypt($rawConfig);
             } else {
                 $configEncrypted = null;
@@ -138,11 +148,27 @@ final class Bot
         }
 
         $name = trim((string)($data['name'] ?? ''));
-        $provider = trim((string)($data['provider'] ?? 'openai'));
+        $provider = strtolower(trim((string)($data['provider'] ?? 'openai')));
         $endpoint = trim((string)($data['endpoint'] ?? ''));
         $model = trim((string)($data['model'] ?? ''));
         $systemPrompt = trim((string)($data['system_prompt'] ?? ''));
         $enabled = !empty($data['enabled']) ? 1 : 0;
+
+        $allowedProviders = ['openai', 'claude', 'anthropic', 'mistral', 'gemini', 'deepseek', 'rool', 'gpai', 'librechat'];
+        if (!in_array($provider, $allowedProviders, true)) {
+            throw new RuntimeException('Ukendt AI-provider.');
+        }
+        if ($name === '' || mb_strlen($name) > 100 || $model === '' || mb_strlen($model) > 150) {
+            throw new RuntimeException('Bot-navn eller model er ugyldig.');
+        }
+        if (mb_strlen($systemPrompt) > 10000) {
+            throw new RuntimeException('System-prompten er for lang.');
+        }
+        try {
+            $endpoint = HttpJsonClient::validateEndpoint($endpoint, $provider);
+        } catch (\InvalidArgumentException $exception) {
+            throw new RuntimeException($exception->getMessage(), 0, $exception);
+        }
 
         if ($existing) {
             $stmt = $db->prepare('
@@ -173,20 +199,32 @@ final class Bot
             return $this->keyStatus;
         }
 
-        $targetEncrypted = $this->apiKeyEncrypted ?: $this->configJsonEncrypted;
-        if (empty($targetEncrypted)) {
+        $candidates = $this->provider === 'gpai'
+            ? [$this->apiKeyEncrypted, $this->configJsonEncrypted]
+            : [$this->apiKeyEncrypted];
+        $candidates = array_values(array_filter(
+            $candidates,
+            static fn(?string $value): bool => $value !== null && $value !== ''
+        ));
+        if ($candidates === []) {
             $this->keyStatus = 'MISSING';
             return 'MISSING';
         }
 
-        $result = Security::decryptWithStatus($targetEncrypted);
-        $this->keyStatus = $result['status'];
-
-        if ($result['status'] === 'MIGRATED' && $result['data'] !== null) {
-            $this->reencryptWithPrimaryKey();
+        foreach ($candidates as $targetEncrypted) {
+            $result = Security::decryptWithStatus($targetEncrypted);
+            if ($result['data'] === null || trim($result['data']) === '') {
+                continue;
+            }
+            $this->keyStatus = $result['status'];
+            if ($result['status'] === 'MIGRATED') {
+                $this->reencryptWithPrimaryKey();
+            }
+            return $this->keyStatus;
         }
 
-        return $this->keyStatus;
+        $this->keyStatus = 'UNREADABLE';
+        return 'UNREADABLE';
     }
 
     public function reencryptWithPrimaryKey(): void
@@ -225,7 +263,16 @@ final class Bot
     public function isConfigured(): bool
     {
         $status = $this->getKeyStatus();
-        return $status === 'VALID' || $status === 'MIGRATED';
+        if ($status !== 'VALID' && $status !== 'MIGRATED') {
+            return false;
+        }
+        if ($this->provider !== 'gpai') {
+            return trim((string)($this->getDecryptedApiKey() ?? '')) !== '';
+        }
+
+        $config = json_decode((string)($this->getDecryptedConfig() ?? ''), true);
+        $password = is_array($config) ? trim((string)($config['password'] ?? '')) : '';
+        return $password !== '' || trim((string)($this->getDecryptedApiKey() ?? '')) !== '';
     }
 
     public function getDecryptedApiKey(): ?string
@@ -266,19 +313,4 @@ final class Bot
         return $this->decryptedConfig;
     }
 
-    public function __get(string $name): mixed
-    {
-        return match ($name) {
-            'bot_key' => $this->botKey,
-            'system_prompt' => $this->systemPrompt,
-            'api_key' => $this->apiKeyEncrypted,
-            'config_json' => $this->configJsonEncrypted,
-            default => null,
-        };
-    }
-
-    public function __isset(string $name): bool
-    {
-        return in_array($name, ['bot_key', 'system_prompt', 'api_key', 'config_json'], true);
-    }
 }

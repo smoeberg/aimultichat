@@ -1,6 +1,0 @@
-[17-Aug-2026 11:23:45 Europe/Copenhagen] PHP Fatal error:  strict_types declaration must be the very first statement in the script in /var/www/wm-group.dk/aichat/src/Controllers/ApiController.php on line 4
-[17-Aug-2026 11:23:45 Europe/Copenhagen] PHP Fatal error:  strict_types declaration must be the very first statement in the script in /var/www/wm-group.dk/aichat/src/Controllers/ApiController.php on line 4
-[17-Aug-2026 11:23:48 Europe/Copenhagen] PHP Fatal error:  strict_types declaration must be the very first statement in the script in /var/www/wm-group.dk/aichat/src/Controllers/ApiController.php on line 4
-[17-Aug-2026 11:23:48 Europe/Copenhagen] PHP Fatal error:  strict_types declaration must be the very first statement in the script in /var/www/wm-group.dk/aichat/src/Controllers/ApiController.php on line 4
-[17-Aug-2026 11:24:21 Europe/Copenhagen] PHP Fatal error:  strict_types declaration must be the very first statement in the script in /var/www/wm-group.dk/aichat/src/Controllers/ApiController.php on line 3
-[17-Aug-2026 11:24:21 Europe/Copenhagen] PHP Fatal error:  strict_types declaration must be the very first statement in the script in /var/www/wm-group.dk/aichat/src/Controllers/ApiController.php on line 3
