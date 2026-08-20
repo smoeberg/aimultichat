@@ -13,6 +13,7 @@ class MultiChatApp {
         this.githubRepo = document.getElementById('githubRepo');
         
         this.isLoading = false;
+        this.requestIdCounter = 0;
     }
     
     async init() {
@@ -22,6 +23,7 @@ class MultiChatApp {
         }
         
         this.setupEventListeners();
+        this.setupCopyProtection();
     }
     
     setupEventListeners() {
@@ -47,6 +49,133 @@ class MultiChatApp {
         return String(text).replace(/[&<>"']/g, (m) => map[m]);
     }
     
+    /**
+     * Generate a unique request ID for AI responses
+     */
+    generateRequestId() {
+        this.requestIdCounter++;
+        return 'req_' + Date.now() + '_' + this.requestIdCounter + '_' + Math.random().toString(36).substr(2, 8);
+    }
+    
+    /**
+     * Setup copy protection for AI-generated content
+     * Adds disclaimer prefix when copying AI responses
+     */
+    setupCopyProtection() {
+        document.addEventListener('copy', (e) => {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+
+            const range = selection.getRangeAt(0);
+            const aiResponse = range.startContainer.closest?.('.ai-response');
+            
+            if (aiResponse) {
+                const requestId = aiResponse.dataset.requestId;
+                const provider = aiResponse.dataset.provider;
+                const model = aiResponse.dataset.model;
+                const timestamp = aiResponse.dataset.timestamp;
+                const content = aiResponse.querySelector('.ai-content')?.textContent || '';
+
+                if (!content) return;
+
+                const markedText = `[AI-GENERERET - Eira AI via ${provider}]
+` + 
+                              `Request ID: ${requestId}
+` + 
+                              `Dato: ${new Date(timestamp).toLocaleString('da-DK')}
+` + 
+                              `${'='.repeat(50)}
+\n` + 
+                              content;
+
+                e.clipboardData.setData('text/plain', markedText);
+
+                // HTML version with metadata
+                const html = `<div data-ai-generated="true" data-request-id="${requestId}" data-provider="${provider}">
+                    <div style="padding:8px;background:#f0f4ff;border-left:4px solid #3b82f6;margin-bottom:8px;font-size:12px;color:#1e40af;">
+                        <strong>🤖 AI-GENERERET - Eira AI</strong><br>
+                        Request ID: ${requestId} · ${new Date(timestamp).toLocaleString('da-DK')}
+                    </div>
+                    ${content}
+                </div>`;
+                e.clipboardData.setData('text/html', html);
+
+                // Log copy event
+                this.logCopyEvent(requestId);
+
+                e.preventDefault();
+            }
+        });
+    }
+    
+    /**
+     * Log copy event to server
+     */
+    async logCopyEvent(requestId) {
+        try {
+            await fetch('?api=log-copy', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': this.csrfToken
+                },
+                body: JSON.stringify({
+                    request_id: requestId,
+                    timestamp: new Date().toISOString()
+                }),
+                credentials: 'same-origin'
+            });
+        } catch (error) {
+            console.error('Failed to log copy event:', error);
+        }
+    }
+    
+    /**
+     * Show toast notification
+     */
+    showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast-notification';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+    
+    /**
+     * Copy request ID to clipboard
+     */
+    copyRequestId(requestId) {
+        navigator.clipboard.writeText(requestId).then(() => {
+            this.showToast('Request ID kopieret: ' + requestId);
+        });
+    }
+    
+    /**
+     * Export document (DOCX or PDF)
+     */
+    exportDocument(requestId, format) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `?api=export-${format}`;
+        form.style.display = 'none';
+
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = 'csrf';
+        csrf.value = this.csrfToken;
+        form.appendChild(csrf);
+
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'request_id';
+        input.value = requestId;
+        form.appendChild(input);
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    }
+    
     renderMessages(messages) {
         if (!messages || messages.length === 0) {
             this.messageContainer.innerHTML = '<p class="empty-state">Ingen beskeder endnu. Start samtalen!</p>';
@@ -57,6 +186,59 @@ class MultiChatApp {
             const role = msg.role;
             const label = role === 'user' ? 'Dig' : role === 'system' ? 'Besked / Kontekst' : 'AI';
             const cssClass = role === 'user' ? 'user' : role === 'system' ? 'system' : 'assistant';
+            
+            // For AI responses, add special marking
+            if (role === 'assistant' && msg.request_id) {
+                const requestId = msg.request_id;
+                const provider = msg.provider || 'unknown';
+                const model = msg.model || 'unknown';
+                const timestamp = msg.timestamp || new Date().toISOString();
+                const shortId = requestId.substring(0, 8) + '...';
+
+                return `<div class="message ${cssClass} ai-response"
+                    data-request-id="${requestId}"
+                    data-provider="${provider}"
+                    data-model="${model}"
+                    data-timestamp="${timestamp}">
+                    
+                    <div class="ai-badge-container">
+                        <div class="ai-badge">
+                            <span>🤖</span>
+                            <span>AI-genereret</span>
+                        </div>
+                        <span class="ai-meta">
+                            ${provider} · ${model}
+                        </span>
+                        <span class="ai-timestamp">
+                            ${new Date(timestamp).toLocaleDateString('da-DK')} ${new Date(timestamp).toLocaleTimeString('da-DK', {hour: '2-digit', minute: '2-digit'})}
+                        </span>
+                        <button onclick="app.copyRequestId('${requestId}')" 
+                                class="copy-btn" 
+                                title="Kopier Request ID">
+                            📋 ${shortId}
+                        </button>
+                    </div>
+                    
+                    <div class="ai-content message-content">${this.escapeHtml(msg.content)}</div>
+                    
+                    <div class="ai-footer">
+                        <span class="ai-request-id">Request ID: <code>${requestId}</code></span>
+                        <span class="ai-policy">Policy: 1.0.0</span>
+                        <div class="ai-export-buttons">
+                            <button onclick="app.exportDocument('${requestId}', 'docx')" 
+                                    class="export-btn docx" 
+                                    title="Export til Word">
+                                📄 DOCX
+                            </button>
+                            <button onclick="app.exportDocument('${requestId}', 'pdf')" 
+                                    class="export-btn pdf" 
+                                    title="Export til PDF">
+                                📄 PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            }
             
             return `<div class="message ${cssClass}">
                 <div class="message-header"><strong>${label}</strong></div>
@@ -204,8 +386,14 @@ class MultiChatApp {
                 return;
             }
             
-            // Add bot response
-            this.appendMessage('assistant', data.reply);
+            // Add bot response with AI marking metadata
+            const requestId = this.generateRequestId();
+            this.appendMessage('assistant', data.reply, null, {
+                request_id: requestId,
+                provider: this.botSelect.selectedOptions[0]?.textContent || 'AI',
+                model: this.botSelect.value,
+                timestamp: new Date().toISOString()
+            });
             await this.refreshChats();
             
         } catch (error) {
@@ -218,9 +406,66 @@ class MultiChatApp {
         }
     }
     
-    appendMessage(role, content, botName = null) {
+    appendMessage(role, content, botName = null, metadata = null) {
         const label = role === 'user' ? 'Dig' : role === 'system' ? 'Besked / Kontekst' : botName || 'AI';
         const cssClass = role === 'user' ? 'user' : role === 'system' ? 'system' : 'assistant';
+        
+        // If this is an AI response with metadata, use the AI response template
+        if (role === 'assistant' && metadata) {
+            const requestId = metadata.request_id || this.generateRequestId();
+            const provider = metadata.provider || 'unknown';
+            const model = metadata.model || 'unknown';
+            const timestamp = metadata.timestamp || new Date().toISOString();
+            const shortId = requestId.substring(0, 8) + '...';
+
+            const html = `<div class="message ${cssClass} ai-response"
+                data-request-id="${requestId}"
+                data-provider="${provider}"
+                data-model="${model}"
+                data-timestamp="${timestamp}">
+                
+                <div class="ai-badge-container">
+                    <div class="ai-badge">
+                        <span>🤖</span>
+                        <span>AI-genereret</span>
+                    </div>
+                    <span class="ai-meta">
+                        ${this.escapeHtml(provider)} · ${this.escapeHtml(model)}
+                    </span>
+                    <span class="ai-timestamp">
+                        ${new Date(timestamp).toLocaleDateString('da-DK')} ${new Date(timestamp).toLocaleTimeString('da-DK', {hour: '2-digit', minute: '2-digit'})}
+                    </span>
+                    <button onclick="app.copyRequestId('${requestId}')" 
+                            class="copy-btn" 
+                            title="Kopier Request ID">
+                        📋 ${shortId}
+                    </button>
+                </div>
+                
+                <div class="ai-content message-content">${this.escapeHtml(content)}</div>
+                
+                <div class="ai-footer">
+                    <span class="ai-request-id">Request ID: <code>${requestId}</code></span>
+                    <span class="ai-policy">Policy: 1.0.0</span>
+                    <div class="ai-export-buttons">
+                        <button onclick="app.exportDocument('${requestId}', 'docx')" 
+                                class="export-btn docx" 
+                                title="Export til Word">
+                            📄 DOCX
+                        </button>
+                        <button onclick="app.exportDocument('${requestId}', 'pdf')" 
+                                class="export-btn pdf" 
+                                title="Export til PDF">
+                            📄 PDF
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+            
+            this.messageContainer.insertAdjacentHTML('beforeend', html);
+            this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
+            return this.messageContainer.lastElementChild;
+        }
         
         const html = `<div class="message ${cssClass}">
             <div class="message-header"><strong>${this.escapeHtml(label)}</strong></div>
@@ -262,10 +507,15 @@ class MultiChatApp {
     }
 }
 
+// Global app instance
+let app;
+
 window.addEventListener('DOMContentLoaded', () => {
-    const app = new MultiChatApp(window.MULTICHAT || {});
+    app = new MultiChatApp(window.MULTICHAT || {});
     app.init().catch((error) => {
         console.error('Multi-Chat initialization error:', error);
-        app.showError('Chatten kunne ikke startes. Genindlæs siden.');
+        if (app && app.errorContainer) {
+            app.showError('Chatten kunne ikke startes. Genindlæs siden.');
+        }
     });
 });

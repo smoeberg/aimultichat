@@ -768,3 +768,151 @@ body.login-page {
         font-size: 22px;
     }
 }
+
+/* ==========================================================================
+   AI Content Marking Styles
+   ========================================================================== */
+
+/* AI Response Component */
+.message.assistant.ai-response {
+    border: 1px solid #3b82f6;
+    background: #f0f4ff;
+    position: relative;
+}
+
+.ai-badge-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #dbeafe;
+    flex-wrap: wrap;
+}
+
+.ai-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #dbeafe;
+    color: #1e40af;
+    padding: 6px 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.ai-meta {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.ai-timestamp {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-left: auto;
+}
+
+.copy-btn {
+    background: transparent;
+    border: 1px solid #3b82f6;
+    color: #3b82f6;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.copy-btn:hover {
+    background: #3b82f6;
+    color: white;
+}
+
+.ai-content {
+    margin-bottom: 12px;
+    line-height: 1.6;
+}
+
+.ai-footer {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #dbeafe;
+    font-size: 11px;
+    color: #64748b;
+    flex-wrap: wrap;
+}
+
+.ai-request-id {
+    font-family: monospace;
+    color: #3b82f6;
+}
+
+.ai-policy {
+    color: #94a3b8;
+}
+
+.ai-export-buttons {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.export-btn {
+    padding: 4px 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.export-btn.docx {
+    background: #3b82f6;
+    color: white;
+}
+
+.export-btn.docx:hover {
+    background: #2563eb;
+}
+
+.export-btn.pdf {
+    background: #ef4444;
+    color: white;
+}
+
+.export-btn.pdf:hover {
+    background: #dc2626;
+}
+
+/* Toast Notification */
+.toast-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #1e293b;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-size: 13px;
+    z-index: 10000;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}

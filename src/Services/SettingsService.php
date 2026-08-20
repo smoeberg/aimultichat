@@ -40,3 +40,41 @@ final class SettingsService {
         $stmt->execute([$key, $stored]);
     }
 }
+
+    /**
+     * Get AI configuration from config/ai.php or database
+     */
+    public static function getAiConfig(string $key, ?string $default = null): ?string
+    {
+        // Try to load from config file first
+        $configPath = __DIR__ . '/../../config/ai.php';
+        if (file_exists($configPath)) {
+            $config = require $configPath;
+            if (isset($config[$key])) {
+                return $config[$key];
+            }
+            // Check nested arrays
+            foreach (explode('.', $key) as $part) {
+                if (isset($config[$part])) {
+                    $config = $config[$part];
+                } else {
+                    break;
+                }
+            }
+            if (is_scalar($config)) {
+                return (string)$config;
+            }
+        }
+        
+        // Fallback to database
+        return self::get($key, $default);
+    }
+
+    /**
+     * Get AI policy version
+     */
+    public static function getAiPolicyVersion(): string
+    {
+        return self::getAiConfig('policy_version', '1.0.0');
+    }
+}
