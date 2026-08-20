@@ -5,7 +5,7 @@
   "identifier": "dk.moeberg.aimultichat.winapp",
   "build": {
     "devUrl": "http://localhost:8000",
-    "frontendDist": "../public"
+    "frontendDist": "frontend"
   },
   "app": {
     "windows": [
