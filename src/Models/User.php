@@ -175,6 +175,124 @@ class User
         return (int)$db->lastInsertId();
     }
     
+
+    // ===== Organization & Role Methods =====
+
+    /**
+     * Get all organization memberships for this user
+     * @return array<OrganizationMember>
+     */
+    public function organizationMembers(): array
+    {
+        return OrganizationMember::findByUser($this->id);
+    }
+
+    /**
+     * Get all organizations this user belongs to
+     * @return array<Organization>
+     */
+    public function organizations(): array
+    {
+        $members = $this->organizationMembers();
+        $organizations = [];
+        
+        foreach ($members as $member) {
+            $org = $member->organization();
+            if ($org) {
+                $organizations[] = $org;
+            }
+        }
+        
+        return $organizations;
+    }
+
+    /**
+     * Get the user's role in a specific organization
+     */
+    public function getCurrentOrganizationRole(?int $organizationId = null): ?Role
+    {
+        $orgId = $organizationId ?? ($this->getCurrentOrganizationId());
+        if (!$orgId) return null;
+
+        $member = OrganizationMember::findByOrganizationAndUser($orgId, $this->id);
+        if (!$member) return null;
+
+        return $member->role();
+    }
+
+    /**
+     * Get the current organization ID from session
+     */
+    public function getCurrentOrganizationId(): ?int
+    {
+        return $_SESSION['current_organization_id'] ?? null;
+    }
+
+    /**
+     * Check if user has a specific capability in the current organization
+     */
+    public function hasCapability(string $capabilityCode, ?int $organizationId = null): bool
+    {
+        $role = $this->getCurrentOrganizationRole($organizationId);
+        if (!$role) return false;
+
+        return $role->hasCapability($capabilityCode);
+    }
+
+    /**
+     * Check if user has any of the specified capabilities
+     */
+    public function hasAnyCapability(array $capabilityCodes, ?int $organizationId = null): bool
+    {
+        foreach ($capabilityCodes as $code) {
+            if ($this->hasCapability($code, $organizationId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if user has all of the specified capabilities
+     */
+    public function hasAllCapabilities(array $capabilityCodes, ?int $organizationId = null): bool
+    {
+        foreach ($capabilityCodes as $code) {
+            if (!$this->hasCapability($code, $organizationId)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Check if user has a specific role in the current organization
+     */
+    public function hasRole(string $roleCode, ?int $organizationId = null): bool
+    {
+        $role = $this->getCurrentOrganizationRole($organizationId);
+        return $role && $role->code === $roleCode;
+    }
+
+    /**
+     * Check if user has any of the specified roles
+     */
+    public function hasAnyRole(array $roleCodes, ?int $organizationId = null): bool
+    {
+        $role = $this->getCurrentOrganizationRole($organizationId);
+        return $role && in_array($role->code, $roleCodes);
+    }
+
+    /**
+     * Get all capability codes for the current organization
+     * @return array<string>
+     */
+    public function getCapabilities(?int $organizationId = null): array
+    {
+        $role = $this->getCurrentOrganizationRole($organizationId);
+        return $role ? $role->capabilityCodes() : [];
+    }
+
     public function claimGuestHistory(User $guest): void
     {
         if ($this->id === $guest->id) {
