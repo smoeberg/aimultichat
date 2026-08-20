@@ -33,6 +33,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $action = $_POST['action'] ?? '';
 
+        // --- REQUEST VERIFICATION ---
+        if (isset($_GET['action']) && $_GET['action'] === 'verify-request') {
+            require_once __DIR__ . '/../src/Http/Controllers/Admin/RequestVerificationController.php';
+            $controller = new Http\Controllers\Admin\RequestVerificationController();
+            $requestId = $_GET['requestId'] ?? '';
+            if ($requestId) {
+                header('Content-Type: application/json');
+                echo json_encode($controller->lookup($requestId, $user->id, $user->id));
+                exit;
+            }
+            echo $controller->showForm();
+            exit;
+        }
+
         // --- BRUGER HÅNDTERING ---
         if ($action === 'create_user') {
             $username = trim((string)($_POST['username'] ?? ''));

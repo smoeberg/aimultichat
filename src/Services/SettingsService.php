@@ -16,6 +16,7 @@ final class SettingsService {
         );
         self::$schemaReady = true;
     }
+
     public static function get(string $key, ?string $default = null): ?string {
         self::ensureSchema();
         $stmt = Database::getInstance()->prepare('SELECT value FROM app_settings WHERE setting_key = ? LIMIT 1');
@@ -38,5 +39,42 @@ final class SettingsService {
             'INSERT INTO app_settings(setting_key, value) VALUES(?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)'
         );
         $stmt->execute([$key, $stored]);
+    }
+
+    /**
+     * Get AI configuration from config/ai.php or database
+     */
+    public static function getAiConfig(string $key, ?string $default = null): ?string
+    {
+        // Try to load from config file first
+        $configPath = __DIR__ . '/../../config/ai.php';
+        if (file_exists($configPath)) {
+            $config = require $configPath;
+            if (isset($config[$key])) {
+                return $config[$key];
+            }
+            // Check nested arrays
+            foreach (explode('.', $key) as $part) {
+                if (isset($config[$part])) {
+                    $config = $config[$part];
+                } else {
+                    break;
+                }
+            }
+            if (is_scalar($config)) {
+                return (string)$config;
+            }
+        }
+        
+        // Fallback to database
+        return self::get($key, $default);
+    }
+
+    /**
+     * Get AI policy version
+     */
+    public static function getAiPolicyVersion(): string
+    {
+        return self::getAiConfig('policy_version', '1.0.0');
     }
 }

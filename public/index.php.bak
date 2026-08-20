@@ -45,31 +45,6 @@ if (isset($_GET['api'])) {
         case 'send':
             if ($_SERVER['REQUEST_METHOD'] === 'POST') { $api->sendMessage(); exit; }
             break;
-        case 'log-copy':
-            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                require_once __DIR__ . '/../src/Http/Controllers/Api/CopyLogController.php';
-                $controller = new Http\Controllers\Api\CopyLogController();
-                $input = json_decode(file_get_contents('php://input'), true) ?: [];
-                $result = $controller->log($input, $user->id, $user->id);
-                echo json_encode($result);
-                exit;
-            }
-            break;
-        case 'export-docx':
-        case 'export-pdf':
-            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                require_once __DIR__ . '/../src/Http/Controllers/Api/ExportController.php';
-                $controller = new Http\Controllers\Api\ExportController();
-                $input = $_POST;
-                $format = str_replace('export-', '', $route);
-                if ($format === 'docx') {
-                    $controller->exportDocx($input, $user->id, $user->id);
-                } else {
-                    $controller->exportPdf($input, $user->id, $user->id);
-                }
-                exit;
-            }
-            break;
     }
     http_response_code(404);
     echo json_encode(['error' => 'Ugyldigt API-endpoint']);
