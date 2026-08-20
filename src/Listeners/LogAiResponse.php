@@ -37,27 +37,26 @@ final class LogAiResponse
         $response = $event->response;
 
         try {
-            // Insert into ai_requests
-            $this->db->exec(
+            // Insert into ai_requests using prepared statements
+            $stmt = $this->db->prepare(
                 "INSERT INTO ai_requests 
                 (request_id, organization_id, user_id, conversation_id, provider, model, 
                  provider_request_id, watermark_type, is_ai_generated, content_hash, 
                  policy_version, created_at, updated_at)
-                VALUES 
-                ('{$this->escape($requestId)}', 
-                 " . ($event->organizationId ? (int)$event->organizationId : 'NULL') . ",
-                 " . ($event->userId ? (int)$event->userId : 'NULL') . ",
-                 " . ($event->conversationId ? (int)$event->conversationId : 'NULL') . ",
-                 '{$this->escape($response->provider)}',
-                 '{$this->escape($response->model)}',
-                 " . ($response->providerRequestId ? "'{$this->escape($response->providerRequestId)}'" : 'NULL') . ",
-                 '{$this->escape($response->watermarkType)}',
-                 1,
-                 '{$this->escape(hash('sha256', $response->content))}',
-                 '1.0.0',
-                 '{$response->timestamp->format('Y-m-d H:i:s')}',
-                 NOW())"
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, '1.0.0', ?, NOW())"
             );
+            $stmt->execute([
+                $requestId,
+                $event->organizationId,
+                $event->userId,
+                $event->conversationId,
+                $response->provider,
+                $response->model,
+                $response->providerRequestId,
+                $response->watermarkType,
+                hash('sha256', $response->content),
+                $response->timestamp->format('Y-m-d H:i:s')
+            ]);
 
             // Insert content into ai_response_contents
             $contentHash = hash('sha256', $response->content);
@@ -89,14 +88,5 @@ final class LogAiResponse
             ]);
             throw $e;
         }
-    }
-
-    /**
-     * Simple escape for SQL (for non-prepared statements)
-     * Note: For production, use prepared statements where possible
-     */
-    private function escape(string $value): string
-    {
-        return str_replace("'", "''", $value);
     }
 }

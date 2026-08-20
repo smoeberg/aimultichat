@@ -16,6 +16,7 @@ final class SettingsService {
         );
         self::$schemaReady = true;
     }
+
     public static function get(string $key, ?string $default = null): ?string {
         self::ensureSchema();
         $stmt = Database::getInstance()->prepare('SELECT value FROM app_settings WHERE setting_key = ? LIMIT 1');
@@ -39,7 +40,6 @@ final class SettingsService {
         );
         $stmt->execute([$key, $stored]);
     }
-}
 
     /**
      * Get AI configuration from config/ai.php or database
