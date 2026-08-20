@@ -43,7 +43,7 @@ set_error_handler(function (int $severity, string $message, string $file, int $l
     throw new ErrorException($message, 0, $severity, $file, $line);
 });
 spl_autoload_register(function(string $class){
-    $prefixes=['Core\\'=>__DIR__.'/src/Core/','Models\\'=>__DIR__.'/src/Models/','Services\\'=>__DIR__.'/src/Services/','Controllers\\'=>__DIR__.'/src/Controllers/','Contracts\\'=>__DIR__.'/src/Contracts/','DTOs\\'=>__DIR__.'/src/DTOs/','Events\\'=>__DIR__.'/src/Events/','Listeners\\'=>__DIR__.'/src/Listeners/'];
+    $prefixes=['Core\\'=>__DIR__.'/src/Core/','Models\\'=>__DIR__.'/src/Models/','Services\\'=>__DIR__.'/src/Services/','Controllers\\'=>__DIR__.'/src/Controllers/','Contracts\\'=>__DIR__.'/src/Contracts/','DTOs\\'=>__DIR__.'/src/DTOs/','Events\\'=>__DIR__.'/src/Events/','Listeners\\'=>__DIR__.'/src/Listeners/','Traits\\'=>__DIR__.'/src/Traits/','Http\\Middleware\\'=>__DIR__.'/src/Http/Middleware/','Http\\Controllers\\Admin\\'=>__DIR__.'/src/Http/Controllers/Admin/','Http\\Controllers\\Auth\\'=>__DIR__.'/src/Http/Controllers/Auth/','Providers\\'=>__DIR__.'/src/Providers/','Helpers\\'=>__DIR__.'/src/Helpers/'];
     foreach($prefixes as $prefix=>$base){ if(str_starts_with($class,$prefix)){ $file=$base.str_replace('\\','/',substr($class,strlen($prefix))).'.php'; if(is_file($file)) require_once $file; return; } }
 });
 function sendSecurityHeaders(): void { if (headers_sent()) return; header('X-Content-Type-Options: nosniff'); header('X-Frame-Options: DENY'); header('Referrer-Policy: strict-origin-when-cross-origin'); header('Permissions-Policy: camera=(), microphone=(), geolocation=()'); if (configValue('APP_ENV','production') === 'production') header('Strict-Transport-Security: max-age=31536000; includeSubDomains'); }
