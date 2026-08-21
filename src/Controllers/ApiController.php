@@ -35,6 +35,10 @@ final class ApiController {
             'bots' => array_map(
                 static fn(Bot $bot): array => $bot->toPublicArray(),
                 Bot::findAll(true)
+            ),
+            'prompt_templates' => array_map(
+                static fn(\Models\PromptTemplate $t): array => $t->toArray(),
+                \Models\PromptTemplate::findAll()
             )
         ]);
     }

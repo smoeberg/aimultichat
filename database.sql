@@ -53,3 +53,17 @@ CREATE TABLE IF NOT EXISTS app_settings (
  value TEXT NULL,
  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS prompt_templates (
+ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ title VARCHAR(255) NOT NULL,
+ category VARCHAR(100) NOT NULL DEFAULT 'Generel',
+ prompt_text TEXT NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO prompt_templates (id, title, category, prompt_text) VALUES
+(1, 'Jobannonce: Softwareudvikler', 'HR & Rekruttering', 'Skriv en professionell og engagerende jobannonce til en stilling som [Stilling/Titel] hos [Virksomhedsnavn]. Annoncen skal indeholde en fængende intro, ansvarsområder, kvalifikationer ([Teknologier/Kompetencer]) og hvad vi tilbyder. Tone of voice skal være [Professionel/Uformel].'),
+(2, 'Standard Skrivelse: Kundesvar vedr. Reklamation', 'Kundeservice', 'Skriv et professionelt, høfligt og empatisk svar til en kunde ([Kundenavn]), der har indsendt en reklamation vedrørende [Produkt/Sag]. Beklager ulejligheden, forklar næste skridt i processen og forsikre kunden om hurtig løsning.'),
+(3, 'Projektforslag & Tidsplan', 'Projektledelse', 'Udarbejd et struktureret udkast til et projektforslag for [Projektnavn]. Inkluder formål, målsætninger, milepæle, ressourceforbrug og anslået tidsplan over [Antal] uger.');

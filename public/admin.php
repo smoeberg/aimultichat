@@ -119,6 +119,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activeTab = 'bots';
         }
 
+        // --- SKABELON-PROMPTS HÅNDTERING ---
+        elseif ($action === 'create_template') {
+            \Models\PromptTemplate::create($_POST);
+            $success = 'Skabelon-prompt blev oprettet!';
+            $activeTab = 'templates';
+        }
+        elseif ($action === 'update_template') {
+            $templateId = (int)($_POST['template_id'] ?? 0);
+            \Models\PromptTemplate::update($templateId, $_POST);
+            $success = 'Skabelon-prompt blev opdateret!';
+            $activeTab = 'templates';
+        }
+        elseif ($action === 'delete_template') {
+            $templateId = (int)($_POST['template_id'] ?? 0);
+            \Models\PromptTemplate::delete($templateId);
+            $success = 'Skabelon-prompt blev slettet!';
+            $activeTab = 'templates';
+        }
+
         // --- BOT HÅNDTERING ---
         elseif ($action === 'save_bot') {
             $botKey = trim((string)($_POST['bot_key'] ?? ''));
@@ -292,6 +311,7 @@ function toggleProviderFields(selectElem, prefix) {
 
   <div class="nav-tabs">
     <a href="?tab=bots" class="nav-tab <?= $activeTab === 'bots' ? 'active' : '' ?>">🤖 AI Bots & API Nøgler</a>
+    <a href="?tab=templates" class="nav-tab <?= $activeTab === 'templates' ? 'active' : '' ?>">💡 Skabelon-prompts</a>
     <a href="?tab=users" class="nav-tab <?= $activeTab === 'users' ? 'active' : '' ?>">👥 Brugeradministration</a>
     <a href="?tab=github" class="nav-tab <?= $activeTab === 'github' ? 'active' : '' ?>">🐙 GitHub</a>
   </div>

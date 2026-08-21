@@ -185,6 +185,12 @@ $csrf = $_SESSION['csrf_token'];
                     <div class="input-github-wrapper">
                         <input type="text" name="github_repo" id="githubRepo" placeholder="📦 GitHub Repo URL (f.eks. https://github.com/bruger/projekt)">
                     </div>
+
+                    <div>
+                        <button type="button" id="templateModalBtn" class="btn-secondary" style="background:#f3f4f6; border:1px solid #d1d5db; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px; font-weight:500; display:inline-flex; align-items:center; gap:6px; white-space:nowrap;">
+                            💡 Skabelon-prompts
+                        </button>
+                    </div>
                 </div>
 
                 <div class="input-box-row">
@@ -204,11 +210,28 @@ $csrf = $_SESSION['csrf_token'];
         </main>
     </div>
 
+    <!-- Prompt Templates Modal -->
+    <div id="templateModalOverlay" class="template-modal-overlay">
+        <div class="template-modal">
+            <div class="template-modal-header">
+                <h3>💡 Skabelon-prompts fra Systemadministrator</h3>
+                <button type="button" id="closeTemplateModal" class="template-modal-close">&times;</button>
+            </div>
+            <div class="template-modal-body">
+                <input type="text" id="templateSearch" class="template-search-input" placeholder="Søg efter skabeloner (f.eks. jobannonce, kundeservice...)...">
+                <div id="templateListContainer">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         window.MULTICHAT = {
             chatId: <?= json_encode($chatId) ?>,
             csrfToken: <?= json_encode($csrf) ?>,
-            defaultBot: <?= json_encode($defaultBotKey) ?>
+            defaultBot: <?= json_encode($defaultBotKey) ?>,
+            promptTemplates: <?= json_encode(array_map(static fn($t) => $t->toArray(), \Models\PromptTemplate::findAll())) ?>
         };
     </script>
     <script src="js/app.js" defer></script>

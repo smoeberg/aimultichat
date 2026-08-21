@@ -24,6 +24,7 @@ class MultiChatApp {
         
         this.setupEventListeners();
         this.setupCopyProtection();
+        this.setupTemplates();
     }
     
     setupEventListeners() {
@@ -519,3 +520,115 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+
+    setupTemplates(templates = null) {
+        this.promptTemplates = templates || window.MULTICHAT.promptTemplates || [];
+        this.templateModalBtn = document.getElementById('templateModalBtn');
+        this.templateModalOverlay = document.getElementById('templateModalOverlay');
+        this.closeTemplateModal = document.getElementById('closeTemplateModal');
+        this.templateSearch = document.getElementById('templateSearch');
+        this.templateListContainer = document.getElementById('templateListContainer');
+
+        if (this.templateModalBtn && this.templateModalOverlay) {
+            this.templateModalBtn.addEventListener('click', () => {
+                this.openTemplateModal();
+            });
+        }
+        if (this.closeTemplateModal && this.templateModalOverlay) {
+            this.closeTemplateModal.addEventListener('click', () => {
+                this.closeTemplateModalWindow();
+            });
+        }
+        if (this.templateModalOverlay) {
+            this.templateModalOverlay.addEventListener('click', (e) => {
+                if (e.target === this.templateModalOverlay) {
+                    this.closeTemplateModalWindow();
+                }
+            });
+        }
+        if (this.templateSearch) {
+            this.templateSearch.addEventListener('input', (e) => {
+                this.renderTemplates(e.target.value);
+            });
+        }
+    }
+
+    openTemplateModal() {
+        if (this.templateModalOverlay) {
+            this.templateModalOverlay.classList.add('active');
+            if (this.templateSearch) {
+                this.templateSearch.value = '';
+                this.templateSearch.focus();
+            }
+            this.renderTemplates('');
+        }
+    }
+
+    closeTemplateModalWindow() {
+        if (this.templateModalOverlay) {
+            this.templateModalOverlay.classList.remove('active');
+        }
+    }
+
+    renderTemplates(query = '') {
+        if (!this.templateListContainer) return;
+        
+        const q = query.toLowerCase().trim();
+        const filtered = this.promptTemplates.filter(t => 
+            t.title.toLowerCase().includes(q) || 
+            t.category.toLowerCase().includes(q) || 
+            t.prompt_text.toLowerCase().includes(q)
+        );
+
+        if (filtered.length === 0) {
+            this.templateListContainer.innerHTML = '<p style="text-align:center; color: var(--text-muted); padding: 20px;">Ingen skabelon-prompts fundet.</p>';
+            return;
+        }
+
+        // Group by category
+        const groups = {};
+        filtered.forEach(t => {
+            const cat = t.category || 'Generel';
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push(t);
+        });
+
+        let html = '';
+        for (const [category, templates] of Object.entries(groups)) {
+            html += `<div class="template-category-group">
+                <div class="template-category-title">${this.escapeHtml(category)}</div>`;
+            
+            templates.forEach(t => {
+                html += `<div class="template-card">
+                    <div class="template-card-title">${this.escapeHtml(t.title)}</div>
+                    <div class="template-card-text">${this.escapeHtml(t.prompt_text)}</div>
+                    <button type="button" class="template-use-btn" data-id="${t.id}">
+                        <span>Brug skabelon</span>
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                    </button>
+                </div>`;
+            });
+            html += `</div>`;
+        }
+
+        this.templateListContainer.innerHTML = html;
+
+        // Attach click listeners to use buttons
+        this.templateListContainer.querySelectorAll('.template-use-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = parseInt(btn.getAttribute('data-id'), 10);
+                const template = this.promptTemplates.find(tp => tp.id === id);
+                if (template) {
+                    const textarea = document.querySelector('textarea[name="message"]');
+                    if (textarea) {
+                        textarea.value = template.prompt_text;
+                        textarea.focus();
+                        textarea.style.height = 'auto';
+                        textarea.style.height = (textarea.scrollHeight) + 'px';
+                    }
+                    this.closeTemplateModalWindow();
+                }
+            });
+        });
+    }
