@@ -173,4 +173,40 @@ final class ApiController {
         echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
         exit;
     }
+
+    public function uploadFile(): void {
+        try {
+            Security::requireCsrfHeader();
+            if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+                $this->json(['error' => 'Ingen fil modtaget eller fejl ved upload.'], 400);
+                return;
+            }
+
+            $file = $_FILES['file'];
+            $uploadDir = __DIR__ . '/../../storage/uploads';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+
+            $safeName = time() . '_' . preg_replace('/[^a-zA-Z0-9_\.-]/', '_', $file['name']);
+            $targetPath = $uploadDir . '/' . $safeName;
+
+            if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+                $this->json(['error' => 'Kunne ikke gemme filen.'], 500);
+                return;
+            }
+
+            $extractedText = \Services\DocumentUploadService::extractText($targetPath, $file['type'], $file['name']);
+
+            $this->json([
+                'success' => true,
+                'filename' => $file['name'],
+                'path' => $safeName,
+                'extracted_text' => $extractedText
+            ]);
+        } catch (\Throwable $e) {
+            Logger::error('File upload failed: ' . $e->getMessage());
+            $this->json(['error' => $e->getMessage()], 400);
+        }
+    }
 }

@@ -738,6 +738,140 @@ class MultiChatApp {
         }
     }
 
+    setupFileUpload() {
+        this.uploadFileBtn = document.getElementById('uploadFileBtn');
+        this.chatFileInput = document.getElementById('chatFileInput');
+        this.attachedFilesContainer = document.getElementById('attachedFilesContainer');
+        this.attachedFiles = [];
+
+        if (this.uploadFileBtn && this.chatFileInput) {
+            this.uploadFileBtn.addEventListener('click', () => {
+                this.chatFileInput.click();
+            });
+
+            this.chatFileInput.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    this.uploadFile(e.target.files[0]);
+                }
+            });
+        }
+
+        const chatForm = document.querySelector('form');
+        if (chatForm) {
+            ['dragenter', 'dragover'].forEach(eventName => {
+                chatForm.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    chatForm.style.borderColor = 'var(--primary-color)';
+                }, false);
+            });
+            ['dragleave', 'drop'].forEach(eventName => {
+                chatForm.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    chatForm.style.borderColor = '';
+                }, false);
+            });
+            chatForm.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files && files[0]) {
+                    this.uploadFile(files[0]);
+                }
+            }, false);
+        }
+    }
+
+    async uploadFile(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        this.showToast('Uploader og analyserer dokument...');
+        try {
+            const res = await fetch('?api=upload_file', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-Token': this.csrfToken
+                },
+                body: formData,
+                credentials: 'same-origin'
+            });
+            const data = await res.json();
+            if (data.success) {
+                this.attachedFiles.push(data);
+                this.renderAttachedFiles();
+                this.showToast('Dokument vedhæftet!');
+
+                const textarea = document.querySelector('textarea[name="message"]');
+                if (textarea) {
+                    const fileTextHeader = `\n\n[Vedhæftet dokument: ${data.filename}]\n${data.extracted_text}\n`;
+                    textarea.value += fileTextHeader;
+                    textarea.style.height = 'auto';
+                    textarea.style.height = (textarea.scrollHeight) + 'px';
+                }
+            } else {
+                this.showToast(data.error || 'Fejl ved upload af fil.');
+            }
+        } catch (err) {
+            console.error('Upload error:', err);
+            this.showToast('Kunne ikke uploade fil.');
+        }
+    }
+
+    renderAttachedFiles() {
+        if (!this.attachedFilesContainer) return;
+        if (this.attachedFiles.length === 0) {
+            this.attachedFilesContainer.style.display = 'none';
+            this.attachedFilesContainer.innerHTML = '';
+            return;
+        }
+
+        this.attachedFilesContainer.style.display = 'flex';
+        let html = '';
+        this.attachedFiles.forEach((f, idx) => {
+            html += `<div style="background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+                <span>📎 <strong>${this.escapeHtml(f.filename)}</strong></span>
+                <button type="button" class="remove-file-btn" data-idx="${idx}" style="background:none; border:none; cursor:pointer; color:#ef4444; font-weight:bold;">&times;</button>
+            </div>`;
+        });
+        this.attachedFilesContainer.innerHTML = html;
+
+        this.attachedFilesContainer.querySelectorAll('.remove-file-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(btn.getAttribute('data-idx'), 10);
+                this.attachedFiles.splice(idx, 1);
+                this.renderAttachedFiles();
+            });
+        });
+    }
+
+    setupSmartPaste() {
+        const textarea = document.querySelector('textarea[name="message"]');
+        const pasteNotification = document.getElementById('pasteNotification');
+        const pasteNotificationText = document.getElementById('pasteNotificationText');
+        const closePasteNotif = document.getElementById('closePasteNotif');
+
+        if (!textarea) return;
+
+        textarea.addEventListener('paste', (e) => {
+            const clipboardData = e.clipboardData || window.clipboardData;
+            const pastedText = clipboardData.getData('text');
+
+            if (pastedText && pastedText.length > 800) {
+                if (pasteNotification && pasteNotificationText) {
+                    pasteNotificationText.textContent = `📄 Lang tekst indsat og renset (${pastedText.length.toLocaleString()} tegn). Klar til AI-analyse.`;
+                    pasteNotification.style.display = 'flex';
+                }
+            }
+        });
+
+        if (closePasteNotif && pasteNotification) {
+            closePasteNotif.addEventListener('click', () => {
+                pasteNotification.style.display = 'none';
+            });
+        }
+    }
+
 }
 
 let app;
@@ -752,5 +886,7 @@ window.addEventListener('DOMContentLoaded', () => {
     });
     if (app && typeof app.setupTemplates === 'function') {
         app.setupTemplates();
+    app.setupFileUpload();
+    app.setupSmartPaste();
     }
 });

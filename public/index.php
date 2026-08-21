@@ -39,6 +39,9 @@ if (isset($_GET['api'])) {
         case 'load':
             if ($_SERVER['REQUEST_METHOD'] === 'GET') { $api->loadChat((int)($_GET['id'] ?? 0)); exit; }
             break;
+        case 'upload_file':
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') { $api->uploadFile(); exit; }
+            break;
         case 'new':
             if ($_SERVER['REQUEST_METHOD'] === 'POST') { $api->newChat(); exit; }
             break;
@@ -197,7 +200,12 @@ $csrf = $_SESSION['csrf_token'];
                 </div>
 
                 <div class="input-box-row">
-                    <textarea name="message" maxlength="50000" placeholder="Stil et spørgsmål eller skriv din besked…" required rows="1"></textarea>
+                    <div id="attachedFilesContainer" style="display: none; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                <div id="pasteNotification" style="display: none; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px 12px; border-radius: 6px; font-size: 12px; margin-bottom: 8px; align-items: center; justify-content: space-between;">
+                    <span id="pasteNotificationText">📄 Lang tekst indsat og renset.</span>
+                    <button type="button" id="closePasteNotif" style="background:none; border:none; cursor:pointer; font-weight:bold; color:#1e40af;">&times;</button>
+                </div>
+                <textarea name="message" maxlength="50000" placeholder="Stil et spørgsmål eller skriv din besked…" required rows="1"></textarea>
                     <button type="submit" class="btn-send" title="Send besked">
                         <span>Send</span>
                         <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
