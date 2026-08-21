@@ -353,11 +353,13 @@ class MultiChatApp {
         const message = this.form.message.value.trim();
         if (!message) return;
         
+        const verifyCheckbox = document.getElementById('verifyAnswerCheckbox');
         const payload = {
             message: message,
             bot: this.botSelect.value,
             chat_id: this.chatId,
-            github_repo: this.githubRepo ? this.githubRepo.value.trim() : ''
+            github_repo: this.githubRepo ? this.githubRepo.value.trim() : '',
+            verify: verifyCheckbox ? verifyCheckbox.checked : false
         };
         
         // Add user message optimistically

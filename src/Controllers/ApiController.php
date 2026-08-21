@@ -154,7 +154,36 @@ final class ApiController {
                 array_unshift($messages, ['role' => 'system', 'content' => $githubContext]);
             }
 
+            $verify = (bool)($input['verify'] ?? false);
             $reply = $this->bots->callBot($bot, $messages);
+
+            if ($verify) {
+                $allBots = Bot::findAll();
+                $verifierBot = null;
+                foreach ($allBots as $b) {
+                    if ($b->id !== $bot->id && $b->enabled && $b->isConfigured()) {
+                        $verifierBot = $b;
+                        break;
+                    }
+                }
+                if (!$verifierBot) {
+                    $verifierBot = $bot;
+                }
+
+                $verifierMessages = [
+                    ['role' => 'system', 'content' => 'Du er en streng kvalitetskontrol- og verifikations-AI mod hallusinationer. Din opgave er at analysere nedenstående svar i forhold til brugerens prompt. Tjek for faktuelle fejl, misforståelser eller opdigtede fakta. Hvis svaret er korrekt og præcist, godkender du det (og kan eventuelt finpudse det let). Hvis der er fejl eller hallusinationer, retter du dem. Svar KUN med det endelige, verificerede svar.'],
+                    ['role' => 'user', 'content' => "Brugerens prompt:\n" . $message . "\n\nOprindeligt AI-svar:\n" . $reply]
+                ];
+
+                try {
+                    $verifiedReply = $this->bots->callBot($verifierBot, $verifierMessages);
+                    if (!empty($verifiedReply)) {
+                        $reply = $verifiedReply . "\n\n*🛡️ [Svaret er dobbelttjekket og verificeret mod hallusinationer af AI-kvalitetskontrol]*";
+                    }
+                } catch (\Throwable $e) {
+                    $reply .= "\n\n*⚠️ [Kunne ikke gennemføre fuld ekstern verifikation: " . htmlspecialchars($e->getMessage()) . "]*";
+                }
+            }
             $chat->addMessage('assistant', $reply);
             $this->json([
                 'reply' => $reply,

@@ -206,6 +206,13 @@ $csrf = $_SESSION['csrf_token'];
                     <button type="button" id="closePasteNotif" style="background:none; border:none; cursor:pointer; font-weight:bold; color:#1e40af;">&times;</button>
                 </div>
                 <textarea name="message" maxlength="50000" placeholder="Stil et spørgsmål eller skriv din besked…" required rows="1"></textarea>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px; padding: 0 4px;">
+                    <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #4b5563; cursor: pointer; font-weight: 500;">
+                        <input type="checkbox" id="verifyAnswerCheckbox" name="verify" style="width: 15px; height: 15px; accent-color: #2563eb; cursor: pointer;">
+                        🛡️ Verificer svar (Anti-hallucination dual-check)
+                    </label>
+                    <span style="font-size: 11px; color: #9ca3af;">AI-kvalitetskontrol</span>
+                </div>
                     <button type="submit" class="btn-send" title="Send besked">
                         <span>Send</span>
                         <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
