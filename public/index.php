@@ -45,6 +45,9 @@ if (isset($_GET['api'])) {
         case 'send':
             if ($_SERVER['REQUEST_METHOD'] === 'POST') { $api->sendMessage(); exit; }
             break;
+        case 'use_template':
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') { $api->useTemplate(); exit; }
+            break;
         case 'log-copy':
             if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 require_once __DIR__ . '/../src/Http/Controllers/Api/CopyLogController.php';
@@ -226,12 +229,48 @@ $csrf = $_SESSION['csrf_token'];
         </div>
     </div>
 
+    <!-- Wizard Modal for Dynamic Placeholders -->
+    <div id="templateWizardModalOverlay" class="template-modal-overlay">
+        <div class="template-modal" style="max-width: 550px;">
+            <div class="template-modal-header">
+                <h3 id="wizardModalTitle">✨ Udfyld skabelon-felter</h3>
+                <button type="button" id="closeWizardModal" class="template-modal-close">&times;</button>
+            </div>
+            <div class="template-modal-body">
+                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
+                    Denne skabelon indeholder dynamiske felter. Udfyld venligst værdierne herunder, før skabelonen indsættes i chatten:
+                </p>
+                <form id="templateWizardForm">
+                    <div id="wizardFieldsContainer" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+                        <!-- Populated via JS -->
+                    </div>
+                    
+                    <div style="background: var(--bg-main); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 20px;">
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; cursor: pointer;">
+                            <input type="checkbox" id="includeToneOfVoice" checked style="width: 16px; height: 16px;">
+                            <span>Inkluder virksomhedens officielle Tone of Voice</span>
+                        </label>
+                        <p style="color: var(--text-muted); font-size: 11px; margin: 4px 0 0 24px;">
+                            Sikrer at AI'en svarer i overensstemmelse med virksomhedens retningslinjer.
+                        </p>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                        <button type="button" id="cancelWizardBtn" class="btn-secondary" style="padding: 8px 16px; font-size: 13px;">Annuller</button>
+                        <button type="submit" class="btn-primary" style="padding: 8px 16px; font-size: 13px;">Indsæt i chat</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         window.MULTICHAT = {
             chatId: <?= json_encode($chatId) ?>,
             csrfToken: <?= json_encode($csrf) ?>,
             defaultBot: <?= json_encode($defaultBotKey) ?>,
-            promptTemplates: <?= json_encode(array_map(static fn($t) => $t->toArray(), \Models\PromptTemplate::findAll())) ?>
+            promptTemplates: <?= json_encode(array_map(static fn($t) => $t->toArray(), \Models\PromptTemplate::findAll())) ?>,
+            companyToneOfVoice: <?= json_encode(\Services\SettingsService::get('company_tone_of_voice', '')) ?>
         };
     </script>
     <script src="js/app.js" defer></script>

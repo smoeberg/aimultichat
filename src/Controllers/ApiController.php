@@ -39,8 +39,23 @@ final class ApiController {
             'prompt_templates' => array_map(
                 static fn(\Models\PromptTemplate $t): array => $t->toArray(),
                 \Models\PromptTemplate::findAll()
-            )
+            ),
+            'company_tone_of_voice' => SettingsService::get('company_tone_of_voice', '')
         ]);
+    }
+
+    public function useTemplate(): void {
+        try {
+            Security::requireCsrfHeader();
+            $input = json_decode(file_get_contents('php://input'), true) ?: [];
+            $templateId = (int)($input['template_id'] ?? 0);
+            if ($templateId > 0) {
+                \Models\PromptTemplate::incrementUsage($templateId);
+            }
+            $this->json(['success' => true]);
+        } catch (\Throwable $e) {
+            $this->json(['error' => $e->getMessage()], 400);
+        }
     }
 
     public function loadChat(int $id):void{

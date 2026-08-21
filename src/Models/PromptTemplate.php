@@ -13,6 +13,8 @@ final class PromptTemplate
     public string $title = '';
     public string $category = 'Generel';
     public string $promptText = '';
+    public string $targetRole = 'all';
+    public int $usageCount = 0;
     public string $createdAt = '';
     public string $updatedAt = '';
 
@@ -23,6 +25,8 @@ final class PromptTemplate
             $this->title = (string)($data['title'] ?? '');
             $this->category = (string)($data['category'] ?? 'Generel');
             $this->promptText = (string)($data['prompt_text'] ?? '');
+            $this->targetRole = (string)($data['target_role'] ?? 'all');
+            $this->usageCount = (int)($data['usage_count'] ?? 0);
             $this->createdAt = (string)($data['created_at'] ?? '');
             $this->updatedAt = (string)($data['updated_at'] ?? '');
         }
@@ -31,7 +35,7 @@ final class PromptTemplate
     public static function findAll(): array
     {
         $db = Database::getInstance();
-        $stmt = $db->query('SELECT * FROM prompt_templates ORDER BY category ASC, title ASC');
+        $stmt = $db->query('SELECT * FROM prompt_templates ORDER BY usage_count DESC, category ASC, title ASC');
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $templates = [];
@@ -57,6 +61,7 @@ final class PromptTemplate
         $title = trim((string)($data['title'] ?? ''));
         $category = trim((string)($data['category'] ?? 'Generel'));
         $promptText = trim((string)($data['prompt_text'] ?? ''));
+        $targetRole = trim((string)($data['target_role'] ?? 'all'));
 
         if ($title === '') {
             throw new RuntimeException('Titel på skabelon-prompt skal udfyldes.');
@@ -65,8 +70,8 @@ final class PromptTemplate
             throw new RuntimeException('Selve prompt-teksten må ikke være tom.');
         }
 
-        $stmt = $db->prepare('INSERT INTO prompt_templates (title, category, prompt_text) VALUES (?, ?, ?)');
-        $stmt->execute([$title, $category, $promptText]);
+        $stmt = $db->prepare('INSERT INTO prompt_templates (title, category, prompt_text, target_role, usage_count) VALUES (?, ?, ?, ?, 0)');
+        $stmt->execute([$title, $category, $promptText, $targetRole]);
 
         $id = (int)$db->lastInsertId();
         return self::findById($id);
@@ -83,6 +88,7 @@ final class PromptTemplate
         $title = trim((string)($data['title'] ?? $template->title));
         $category = trim((string)($data['category'] ?? $template->category));
         $promptText = trim((string)($data['prompt_text'] ?? $template->promptText));
+        $targetRole = trim((string)($data['target_role'] ?? $template->targetRole));
 
         if ($title === '') {
             throw new RuntimeException('Titel på skabelon-prompt skal udfyldes.');
@@ -91,10 +97,17 @@ final class PromptTemplate
             throw new RuntimeException('Selve prompt-teksten må ikke være tom.');
         }
 
-        $stmt = $db->prepare('UPDATE prompt_templates SET title = ?, category = ?, prompt_text = ? WHERE id = ?');
-        $stmt->execute([$title, $category, $promptText, $id]);
+        $stmt = $db->prepare('UPDATE prompt_templates SET title = ?, category = ?, prompt_text = ?, target_role = ? WHERE id = ?');
+        $stmt->execute([$title, $category, $promptText, $targetRole, $id]);
 
         return self::findById($id);
+    }
+
+    public static function incrementUsage(int $id): bool
+    {
+        $db = Database::getInstance();
+        $stmt = $db->prepare('UPDATE prompt_templates SET usage_count = usage_count + 1 WHERE id = ?');
+        return $stmt->execute([$id]);
     }
 
     public static function delete(int $id): bool
@@ -111,6 +124,8 @@ final class PromptTemplate
             'title' => $this->title,
             'category' => $this->category,
             'prompt_text' => $this->promptText,
+            'target_role' => $this->targetRole,
+            'usage_count' => $this->usageCount,
             'created_at' => $this->createdAt,
             'updated_at' => $this->updatedAt,
         ];

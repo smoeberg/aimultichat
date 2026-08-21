@@ -119,7 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activeTab = 'bots';
         }
 
-        // --- SKABELON-PROMPTS HÅNDTERING ---
+        // --- SKABELON-PROMPTS OG TONE OF VOICE HÅNDTERING ---
         elseif ($action === 'create_template') {
             \Models\PromptTemplate::create($_POST);
             $success = 'Skabelon-prompt blev oprettet!';
@@ -135,6 +135,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $templateId = (int)($_POST['template_id'] ?? 0);
             \Models\PromptTemplate::delete($templateId);
             $success = 'Skabelon-prompt blev slettet!';
+            $activeTab = 'templates';
+        }
+        elseif ($action === 'save_tone_of_voice') {
+            $tone = trim((string)($_POST['company_tone_of_voice'] ?? ''));
+            SettingsService::put('company_tone_of_voice', $tone);
+            $success = 'Virksomhedens Tone of Voice blev opdateret!';
             $activeTab = 'templates';
         }
 
@@ -352,7 +358,114 @@ function toggleProviderFields(selectElem, prefix) {
       <p style="margin-bottom:0;color:#555;">I chatten kan du fortsat angive repositoryet som fx <code>https://github.com/ejer/projekt</code>. Multi-Chat bruger automatisk denne forbindelse.</p>
     </div>
 
-  <?php elseif ($activeTab === 'users'): ?>
+  <?php if ($activeTab === 'templates'): ?>
+    <div class="card" style="margin-bottom: 24px;">
+        <h2>🏢 Central Tone of Voice for Virksomheden</h2>
+        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">
+            Definer virksomhedens officielle retningslinjer for Tone of Voice. Medarbejderne kan vælge at lade AI'en følge disse retningslinjer automatisk, når de bruger skabelon-prompts.
+        </p>
+        <?php $currentTone = SettingsService::get('company_tone_of_voice', 'Professionel, klar, venlig og løsningsorienteret på dansk.'); ?>
+        <form method="post">
+            <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="action" value="save_tone_of_voice">
+            <div style="margin-bottom: 12px;">
+                <textarea name="company_tone_of_voice" rows="3" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; font-family: inherit;" placeholder="f.eks. Formel men imødekommende tone, brug altid 'du' og 'dig', skriv præcist og professionelt på dansk..."><?= htmlspecialchars($currentTone, ENT_NOQUOTES, 'UTF-8') ?></textarea>
+            </div>
+            <button type="submit" class="btn-primary" style="padding: 8px 16px; font-size: 13px;">Gem Tone of Voice</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <div>
+                <h2>💡 Skabelon-prompts & Wizard-formularer</h2>
+                <p style="color: var(--text-muted); font-size: 14px; margin: 4px 0 0 0;">
+                    Opret intelligente skabeloner med dynamiske felter (f.eks. <code>{Stilling}</code> eller <code>{Afdeling}</code>), der automatisk genererer en udfyldningsformular til medarbejderne.
+                </p>
+            </div>
+        </div>
+
+        <!-- Opret ny skabelon -->
+        <h3 style="font-size: 15px; margin-bottom: 12px; font-weight: 600;">Opret ny skabelon-prompt</h3>
+        <form method="post" style="margin-bottom: 30px; background: var(--bg-main); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color);">
+            <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="action" value="create_template">
+            
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Titel på skabelon</label>
+                    <input type="text" name="title" placeholder="f.eks. Jobannonce: Salgschef" required style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Kategori</label>
+                    <input type="text" name="category" placeholder="f.eks. HR" value="Generel" required style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Målgruppe / Rolle</label>
+                    <select name="target_role" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px;">
+                        <option value="all">Alle medarbejdere</option>
+                        <option value="admin">Kun administratorer</option>
+                        <option value="user">Almindelige brugere</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Prompt-tekst (Brug <code>{Stilling}</code> eller <code>{Afdeling}</code> til dynamiske felter)</label>
+                <textarea name="prompt_text" rows="4" placeholder="Skriv en professionel jobannonce for en {Stilling} i afdelingen {Afdeling} med primære ansvarsområder: {Ansvarsomraader}..." required style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; font-family: inherit;"></textarea>
+            </div>
+
+            <button type="submit" class="btn-primary" style="padding: 8px 16px; font-size: 13px;">Opret skabelon-prompt</button>
+        </form>
+
+        <!-- Liste over eksisterende skabeloner & Analytics -->
+        <h3 style="font-size: 15px; margin-bottom: 12px; font-weight: 600;">Eksisterende skabelon-prompts & Anvendelse (Analytics)</h3>
+        
+        <?php $templates = \Models\PromptTemplate::findAll(); if (empty($templates)): ?>
+            <p style="color: var(--text-muted); font-size: 13px;">Ingen skabelon-prompts oprettet endnu.</p>
+        <?php else: ?>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <?php foreach ($templates as $t): ?>
+                    <div style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-size: 12px; background: var(--primary-soft); color: var(--primary-color); padding: 2px 8px; border-radius: 4px; font-weight: 600;"><?= htmlspecialchars($t->category) ?></span>
+                            <span style="font-size: 12px; color: var(--text-muted);">📊 Anvendt <strong><?= $t->usageCount ?></strong> gange</span>
+                        </div>
+                        
+                        <form method="post">
+                            <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="hidden" name="action" value="update_template">
+                            <input type="hidden" name="template_id" value="<?= $t->id ?>">
+
+                            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 12px; margin-bottom: 8px;">
+                                <input type="text" name="title" value="<?= htmlspecialchars($t->title, ENT_QUOTES, 'UTF-8') ?>" required style="padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; font-weight: 600;">
+                                <input type="text" name="category" value="<?= htmlspecialchars($t->category, ENT_QUOTES, 'UTF-8') ?>" required style="padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px;">
+                                <select name="target_role" style="padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px;">
+                                    <option value="all" <?= $t->targetRole==='all'?'selected':'' ?>>Alle</option>
+                                    <option value="admin" <?= $t->targetRole==='admin'?'selected':'' ?>>Kun Admin</option>
+                                    <option value="user" <?= $t->targetRole==='user'?'selected':'' ?>>Brugere</option>
+                                </select>
+                                <button type="submit" class="btn-primary" style="padding: 6px 12px; font-size: 12px;">Gem</button>
+                            </div>
+                            <div style="margin-bottom: 8px;">
+                                <textarea name="prompt_text" rows="3" required style="width: 100%; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; font-family: inherit;"><?= htmlspecialchars($t->promptText, ENT_NOQUOTES, 'UTF-8') ?></textarea>
+                            </div>
+                        </form>
+                        
+                        <div style="display: flex; justify-content: flex-end;">
+                            <form method="post" onsubmit="return confirm('Er du sikker på, at du vil slette denne skabelon-prompt?');">
+                                <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                                <input type="hidden" name="action" value="delete_template">
+                                <input type="hidden" name="template_id" value="<?= $t->id ?>">
+                                <button type="submit" style="background: none; border: none; color: #dc2626; font-size: 12px; cursor: pointer; font-weight: 500;">Slet skabelon</button>
+                            </form>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+<?php elseif ($activeTab === 'users'): ?>
     <!-- BRUGERADMINISTRATION -->
     <h2>Opret Ny Bruger</h2>
     <div class="card">

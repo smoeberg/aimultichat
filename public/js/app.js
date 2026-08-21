@@ -505,30 +505,22 @@ class MultiChatApp {
         this.errorContainer.textContent = '';
         this.errorContainer.style.display = 'none';
         clearTimeout(this.errorTimeout);
-    }
-}
-
-// Global app instance
-let app;
-
-window.addEventListener('DOMContentLoaded', () => {
-    app = new MultiChatApp(window.MULTICHAT || {});
-    app.init().catch((error) => {
-        console.error('Multi-Chat initialization error:', error);
-        if (app && app.errorContainer) {
-            app.showError('Chatten kunne ikke startes. Genindlæs siden.');
-        }
-    });
-});
-
-
     setupTemplates(templates = null) {
         this.promptTemplates = templates || window.MULTICHAT.promptTemplates || [];
+        this.companyToneOfVoice = window.MULTICHAT.companyToneOfVoice || '';
         this.templateModalBtn = document.getElementById('templateModalBtn');
         this.templateModalOverlay = document.getElementById('templateModalOverlay');
         this.closeTemplateModal = document.getElementById('closeTemplateModal');
         this.templateSearch = document.getElementById('templateSearch');
         this.templateListContainer = document.getElementById('templateListContainer');
+
+        this.templateWizardModalOverlay = document.getElementById('templateWizardModalOverlay');
+        this.closeWizardModal = document.getElementById('closeWizardModal');
+        this.cancelWizardBtn = document.getElementById('cancelWizardBtn');
+        this.templateWizardForm = document.getElementById('templateWizardForm');
+        this.wizardFieldsContainer = document.getElementById('wizardFieldsContainer');
+        this.wizardModalTitle = document.getElementById('wizardModalTitle');
+        this.includeToneOfVoiceCheckbox = document.getElementById('includeToneOfVoice');
 
         if (this.templateModalBtn && this.templateModalOverlay) {
             this.templateModalBtn.addEventListener('click', () => {
@@ -552,6 +544,30 @@ window.addEventListener('DOMContentLoaded', () => {
                 this.renderTemplates(e.target.value);
             });
         }
+
+        // Wizard modal listeners
+        if (this.closeWizardModal && this.templateWizardModalOverlay) {
+            this.closeWizardModal.addEventListener('click', () => {
+                this.closeWizardModalWindow();
+            });
+        }
+        if (this.cancelWizardBtn && this.templateWizardModalOverlay) {
+            this.cancelWizardBtn.addEventListener('click', () => {
+                this.closeWizardModalWindow();
+            });
+        }
+        if (this.templateWizardModalOverlay) {
+            this.templateWizardModalOverlay.addEventListener('click', (e) => {
+                if (e.target === this.templateWizardModalOverlay) {
+                    this.closeWizardModalWindow();
+                }
+            });
+        }
+        if (this.templateWizardForm) {
+            this.templateWizardForm.addEventListener('submit', (e) => {
+                this.handleWizardSubmit(e);
+            });
+        }
     }
 
     openTemplateModal() {
@@ -568,6 +584,12 @@ window.addEventListener('DOMContentLoaded', () => {
     closeTemplateModalWindow() {
         if (this.templateModalOverlay) {
             this.templateModalOverlay.classList.remove('active');
+        }
+    }
+
+    closeWizardModalWindow() {
+        if (this.templateWizardModalOverlay) {
+            this.templateWizardModalOverlay.classList.remove('active');
         }
     }
 
@@ -603,10 +625,13 @@ window.addEventListener('DOMContentLoaded', () => {
                 html += `<div class="template-card">
                     <div class="template-card-title">${this.escapeHtml(t.title)}</div>
                     <div class="template-card-text">${this.escapeHtml(t.prompt_text)}</div>
-                    <button type="button" class="template-use-btn" data-id="${t.id}">
-                        <span>Brug skabelon</span>
-                        <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                    </button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                        <span style="font-size: 11px; color: var(--text-muted);">📊 ${t.usage_count} anvendelser</span>
+                        <button type="button" class="template-use-btn" data-id="${t.id}">
+                            <span>Brug skabelon</span>
+                            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                        </button>
+                    </div>
                 </div>`;
             });
             html += `</div>`;
@@ -620,15 +645,112 @@ window.addEventListener('DOMContentLoaded', () => {
                 const id = parseInt(btn.getAttribute('data-id'), 10);
                 const template = this.promptTemplates.find(tp => tp.id === id);
                 if (template) {
-                    const textarea = document.querySelector('textarea[name="message"]');
-                    if (textarea) {
-                        textarea.value = template.prompt_text;
-                        textarea.focus();
-                        textarea.style.height = 'auto';
-                        textarea.style.height = (textarea.scrollHeight) + 'px';
-                    }
                     this.closeTemplateModalWindow();
+                    this.openWizardModal(template);
                 }
             });
         });
     }
+
+    openWizardModal(template) {
+        this.currentActiveTemplate = template;
+        if (this.wizardModalTitle) {
+            this.wizardModalTitle.textContent = '✨ Udfyld felter: ' + template.title;
+        }
+
+        // Scan prompt text for placeholders like {felt_navn} or [Felt Navn]
+        const regex = /\{([^}]+)\}|\[([^\]]+)\]/g;
+        let match;
+        const placeholders = new Set();
+        while ((match = regex.exec(template.prompt_text)) !== null) {
+            const p = match[1] || match[2];
+            if (p) placeholders.add(p.trim());
+        }
+
+        if (this.wizardFieldsContainer) {
+            if (placeholders.size === 0) {
+                this.wizardFieldsContainer.innerHTML = '<p style="font-size:13px; color:var(--text-muted);">Denne skabelon har ingen dynamiske felter. Du kan indsætte den direkte.</p>';
+            } else {
+                let fieldsHtml = '';
+                placeholders.forEach(ph => {
+                    const fieldId = 'ph_' + ph.replace(/[^a-zA-Z0-9]/g, '_');
+                    fieldsHtml += `<div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">${this.escapeHtml(ph)}</label>
+                        <input type="text" name="${this.escapeHtml(ph)}" id="${fieldId}" placeholder="Indtast ${this.escapeHtml(ph)}..." required style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px;">
+                    </div>`;
+                });
+                this.wizardFieldsContainer.innerHTML = fieldsHtml;
+            }
+        }
+
+        if (this.templateWizardModalOverlay) {
+            this.templateWizardModalOverlay.classList.add('active');
+        }
+    }
+
+    async handleWizardSubmit(e) {
+        e.preventDefault();
+        if (!this.currentActiveTemplate) return;
+
+        let processedText = this.currentActiveTemplate.prompt_text;
+        const formData = new FormData(this.templateWizardForm);
+
+        // Replace placeholders
+        formData.forEach((value, key) => {
+            const val = value.toString().trim();
+            processedText = processedText.replace(new RegExp('\{' + key + '\}', 'g'), val);
+            processedText = processedText.replace(new RegExp('\[' + key + '\]', 'g'), val);
+        });
+
+        // Append Tone of Voice if checked
+        if (this.includeToneOfVoiceCheckbox && this.includeToneOfVoiceCheckbox.checked && this.companyToneOfVoice) {
+            processedText = `[Virksomhedens Tone of Voice retningslinjer: ${this.companyToneOfVoice}]
+
+` + processedText;
+        }
+
+        // Insert into chat textarea
+        const textarea = document.querySelector('textarea[name="message"]');
+        if (textarea) {
+            textarea.value = processedText;
+            textarea.focus();
+            textarea.style.height = 'auto';
+            textarea.style.height = (textarea.scrollHeight) + 'px';
+        }
+
+        this.closeWizardModalWindow();
+        this.showToast('Skabelon indsat i chat!');
+
+        // Increment usage count via API
+        try {
+            await fetch('?api=use_template', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': this.csrfToken
+                },
+                body: JSON.stringify({ template_id: this.currentActiveTemplate.id }),
+                credentials: 'same-origin'
+            });
+            this.currentActiveTemplate.usage_count = (this.currentActiveTemplate.usage_count || 0) + 1;
+        } catch (err) {
+            console.error('Failed to increment template usage:', err);
+        }
+    }
+
+}
+
+let app;
+
+window.addEventListener('DOMContentLoaded', () => {
+    app = new MultiChatApp(window.MULTICHAT || {});
+    app.init().catch((error) => {
+        console.error('Multi-Chat initialization error:', error);
+        if (app && app.errorContainer) {
+            app.showError('Chatten kunne ikke startes. Genindlæs siden.');
+        }
+    });
+    if (app && typeof app.setupTemplates === 'function') {
+        app.setupTemplates();
+    }
+});
