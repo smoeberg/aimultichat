@@ -319,7 +319,6 @@ function toggleProviderFields(selectElem, prefix) {
     <a href="?tab=bots" class="nav-tab <?= $activeTab === 'bots' ? 'active' : '' ?>">🤖 AI Bots & API Nøgler</a>
     <a href="?tab=templates" class="nav-tab <?= $activeTab === 'templates' ? 'active' : '' ?>">💡 Skabelon-prompts</a>
     <a href="?tab=users" class="nav-tab <?= $activeTab === 'users' ? 'active' : '' ?>">👥 Brugeradministration</a>
-    <a href="?tab=github" class="nav-tab <?= $activeTab === 'github' ? 'active' : '' ?>">🐙 GitHub</a>
     <a href="?tab=analytics" class="nav-tab <?= $activeTab === 'analytics' ? 'active' : '' ?>">📊 Forbrug & Cost</a>
     <a href="?tab=rag" class="nav-tab <?= $activeTab === 'rag' ? 'active' : '' ?>">📚 Vidensbase (RAG)</a>
   </div>
