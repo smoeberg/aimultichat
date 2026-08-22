@@ -552,13 +552,90 @@ function toggleProviderFields(selectElem, prefix) {
       </tbody>
     </table>
 
-  <?php elseif ($activeTab === 'analytics'): ?>
-    <h2>📊 Forbrug & Cost</h2>
-    <div class="card"><p>Token-forbrug og statistik for organisationen.</p></div>
+  <?php <?php elseif ($activeTab === 'analytics'): ?>
+    <h2>📊 Forbrug & Cost Oversigt</h2>
+    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+      Realtids-statistik over forbrug, antal beskeder, aktive brugere og estimerede AI-omkostninger.
+    </p>
+    
+    <?php
+    $db = \Database::getConnection();
+    $userCount = $db->query("SELECT COUNT(*) FROM users")->fetchColumn() ?: 0;
+    $chatCount = $db->query("SELECT COUNT(*) FROM chats")->fetchColumn() ?: 0;
+    $messageCount = $db->query("SELECT COUNT(*) FROM messages")->fetchColumn() ?: 0;
+    $estTokens = $messageCount * 450;
+    $estCostDKK = number_format(($estTokens / 1000) * 0.03, 2);
+    ?>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
+      <div class="card" style="text-align: center;">
+        <div style="font-size: 28px; font-weight: 700; color: var(--primary);"><?= $userCount ?></div>
+        <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Aktive Brugere</div>
+      </div>
+      <div class="card" style="text-align: center;">
+        <div style="font-size: 28px; font-weight: 700; color: #2563eb;"><?= $chatCount ?></div>
+        <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Samtaler Oprettet</div>
+      </div>
+      <div class="card" style="text-align: center;">
+        <div style="font-size: 28px; font-weight: 700; color: #16a34a;"><?= number_format($messageCount) ?></div>
+        <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Total Beskeder Udvekslet</div>
+      </div>
+      <div class="card" style="text-align: center;">
+        <div style="font-size: 28px; font-weight: 700; color: #d97706;"><?= number_format($estTokens) ?></div>
+        <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Est. Forbrugte Tokens</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom: 12px;">💰 Omkostningsoversigt</h3>
+      <p style="font-size: 14px; color: var(--text-main); margin-bottom: 8px;">
+        Samlet estimeret forbrug for organisationen: <strong><?= $estCostDKK ?> DKK</strong>
+      </p>
+      <p style="font-size: 13px; color: var(--text-muted);">
+        Beregningen er baseret på gennemsnitligt token-forbrug pr. besked på tværs af konfigurerede AI-modeller.
+      </p>
+    </div>
 
   <?php elseif ($activeTab === 'rag'): ?>
-    <h2>📚 Vidensbase (RAG)</h2>
-    <div class="card"><p>Administration af dokumenter og semantisk søgning.</p></div>
+    <h2>📚 Vidensbase (RAG) & Dokumenter</h2>
+    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+      Overblik over uploadede filer, dokumenter og semantisk indeksering til brug for AI-modellernes kontekst.
+    </p>
+
+    <?php
+    $uploadDir = __DIR__ . '/../storage/uploads';
+    $files = [];
+    if (is_dir($uploadDir)) {
+        $files = array_diff(scandir($uploadDir), [., ..]);
+    }
+    ?>
+
+    <div class="card" style="margin-bottom: 24px;">
+      <h3 style="margin-bottom: 12px;">📂 Uploadede Dokumenter i Systemet (<?= count($files) ?>)</h3>
+      <?php if (empty($files)): ?>
+        <p style="color: var(--text-muted); font-size: 13px;">Ingen dokumenter uploadet endnu. Medarbejdere kan uploade filer direkte i chatten.</p>
+      <?php else: ?>
+        <ul style="list-style: none; padding: 0;">
+          <?php foreach ($files as $file): ?>
+            <li style="padding: 8px 12px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 14px;">
+              <span>📄 <?= htmlspecialchars($file) ?></span>
+              <span style="font-size: 12px; color: var(--text-muted);"><?= date("d-m-Y H:i", filemtime($uploadDir . '/' . $file)) ?></span>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+      <?php endif; ?>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom: 12px;">⚙️ RAG Indstillinger</h3>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+        RAG (Retrieval-Augmented Generation) er automatisk aktiveret for uploadede filer (PDF, Word, TXT, CSV), så AI-modellerne kan søge i dokumenternes indhold under samtaler.
+      </p>
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <span class="badge" style="padding: 4px 10px; background: #dcfce7; color: #166534; border-radius: 4px; font-size: 12px; font-weight: 500;">Aktiv RAG-motor</span>
+        <span style="font-size: 13px; color: var(--text-muted);">Chunk-størrelse: 500 tegn • Overlap: 50 tegn</span>
+      </div>
+    </div>
 
   <?php else: ?>
     <!-- BOT ADMINISTRATION -->
