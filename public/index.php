@@ -202,6 +202,12 @@ $csrf = $_SESSION['csrf_token'];
                             💡 Skabelon-prompts
                         </button>
                     </div>
+                    <div>
+                        <button type="button" id="uploadFileBtn" class="btn-secondary" style="background:#f3f4f6; border:1px solid #d1d5db; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px; font-weight:500; display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" title="Vedhæft dokument (PDF, Word, TXT, CSV)">
+                            📎 Vedhæft fil
+                        </button>
+                        <input type="file" id="chatFileInput" name="file" style="display: none;" accept=".pdf,.docx,.txt,.csv">
+                    </div>
                 </div>
 
                 <div class="input-box-row">
