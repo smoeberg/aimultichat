@@ -37,6 +37,24 @@ class MultiChatApp {
                 this.createNewChat();
             });
         }
+        
+        const toggleGithubBtn = document.getElementById('toggleGithubBtn');
+        const githubWrapper = document.getElementById('githubWrapper');
+        if (toggleGithubBtn && githubWrapper) {
+            toggleGithubBtn.addEventListener('click', () => {
+                if (githubWrapper.style.display === 'none') {
+                    githubWrapper.style.display = 'block';
+                    toggleGithubBtn.style.background = '#e5e7eb';
+                    toggleGithubBtn.style.borderColor = '#9ca3af';
+                    const input = githubWrapper.querySelector('input');
+                    if (input) input.focus();
+                } else {
+                    githubWrapper.style.display = 'none';
+                    toggleGithubBtn.style.background = '#f3f4f6';
+                    toggleGithubBtn.style.borderColor = '#d1d5db';
+                }
+            });
+        }
     }
     
     escapeHtml(text) {

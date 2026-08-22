@@ -188,7 +188,12 @@ $csrf = $_SESSION['csrf_token'];
                         </select>
                     </div>
 
-                    <div class="input-github-wrapper">
+                    <div>
+                        <button type="button" id="toggleGithubBtn" class="btn-secondary" style="background:#f3f4f6; border:1px solid #d1d5db; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px; font-weight:500; display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" title="Tilføj GitHub repository som kontekst">
+                            🐙 GitHub
+                        </button>
+                    </div>
+                    <div class="input-github-wrapper" id="githubWrapper" style="display: none; flex: 1;">
                         <input type="text" name="github_repo" id="githubRepo" placeholder="📦 GitHub Repo URL (f.eks. https://github.com/bruger/projekt)">
                     </div>
 
