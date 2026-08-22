@@ -360,7 +360,7 @@ function toggleProviderFields(selectElem, prefix) {
       <p style="margin-bottom:0;color:#555;">I chatten kan du fortsat angive repositoryet som fx <code>https://github.com/ejer/projekt</code>. Multi-Chat bruger automatisk denne forbindelse.</p>
     </div>
 
-  <?php if ($activeTab === 'templates'): ?>
+  <?php elseif ($activeTab === 'templates'): ?>
     <div class="card" style="margin-bottom: 24px;">
         <h2>🏢 Central Tone of Voice for Virksomheden</h2>
         <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">
@@ -425,7 +425,13 @@ function toggleProviderFields(selectElem, prefix) {
         
         <?php $templates = \Models\PromptTemplate::findAll(); if (empty($templates)): ?>
             <p style="color: var(--text-muted); font-size: 13px;">Ingen skabelon-prompts oprettet endnu.</p>
-        <?php else: ?>
+        <?php elseif ($activeTab === 'analytics'): ?>
+    <h2>📊 Forbrug & Cost</h2>
+    <div class="card"><p>Token-forbrug og statistik for organisationen.</p></div>
+  <?php elseif ($activeTab === 'rag'): ?>
+    <h2>📚 Vidensbase (RAG)</h2>
+    <div class="card"><p>Administration af dokumenter og semantisk søgning.</p></div>
+  <?php else: ?>
             <div style="display: flex; flex-direction: column; gap: 12px;">
                 <?php foreach ($templates as $t): ?>
                     <div style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px;">
@@ -781,6 +787,7 @@ function toggleProviderFields(selectElem, prefix) {
         </details>
       </div>
     <?php endforeach; ?>
+  <?php endif; ?>
 </div>
 </div>
 </body>
