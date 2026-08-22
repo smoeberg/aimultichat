@@ -324,43 +324,7 @@ function toggleProviderFields(selectElem, prefix) {
     <a href="?tab=rag" class="nav-tab <?= $activeTab === 'rag' ? 'active' : '' ?>">📚 Vidensbase (RAG)</a>
   </div>
 
-  <?php if ($activeTab === 'github'): ?>
-    <h2>🐙 GitHub-forbindelse</h2>
-    <div class="card">
-      <p><strong>Ja — det er den rigtige løsning.</strong> Multi-Chat bør have en central GitHub-forbindelse i Admin, så du ikke skal sende en token med hver chat. Det gør det muligt at læse både offentlige og private repositories, når GitHub-tokenet har den nødvendige adgang.</p>
-      <div style="background:#fff7ed;border:1px solid #fed7aa;padding:12px;border-radius:6px;margin-bottom:15px;">
-        <strong>🔐 Sikkerhed:</strong> Tokenet krypteres før det gemmes i databasen. Vi gemmer ikke GitHub-adgangskoden. Brug en GitHub <strong>Fine-grained Personal Access Token</strong> med mindst <strong>Contents: Read-only</strong> på de repositories Multi-Chat skal kunne læse.
-      </div>
-      <?php $githubUsername = SettingsService::get('github_username', ''); $githubConfigured = SettingsService::getSecret('github_token') !== null; ?>
-      <form method="post">
-        <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
-        <input type="hidden" name="action" value="save_github">
-        <div class="form-grid">
-          <div>
-            <label>GitHub bruger / ejer</label>
-            <input type="text" name="github_username" value="<?= htmlspecialchars($githubUsername) ?>" placeholder="f.eks. smoeberg" required>
-          </div>
-          <div>
-            <label>Forbindelsesstatus</label>
-            <div style="padding:9px;background:#fff;border:1px solid #ccc;border-radius:5px;"><?= $githubConfigured ? '✅ Token konfigureret' : '⚠️ Ingen token konfigureret' ?></div>
-          </div>
-          <div class="full-width">
-            <label>GitHub Fine-grained Personal Access Token</label>
-            <input type="password" name="github_token" placeholder="<?= $githubConfigured ? '•••••••• (skriv kun hvis token skal ændres)' : 'ghp_... / github_pat_...' ?>" autocomplete="new-password">
-          </div>
-          <div class="full-width">
-            <label><input type="checkbox" name="clear_github_token" value="1"> Fjern gemt GitHub-token</label>
-          </div>
-          <div class="full-width">
-            <button type="submit" class="btn-primary">Gem GitHub-forbindelse</button>
-          </div>
-        </div>
-      </form>
-      <hr style="border:0;border-top:1px solid #ddd;margin:20px 0;">
-      <p style="margin-bottom:0;color:#555;">I chatten kan du fortsat angive repositoryet som fx <code>https://github.com/ejer/projekt</code>. Multi-Chat bruger automatisk denne forbindelse.</p>
-    </div>
-
-  <?php elseif ($activeTab === 'templates'): ?>
+  <?php if ($activeTab === 'templates'): ?>
     <div class="card" style="margin-bottom: 24px;">
         <h2>🏢 Central Tone of Voice for Virksomheden</h2>
         <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">
@@ -431,7 +395,40 @@ function toggleProviderFields(selectElem, prefix) {
   <?php elseif ($activeTab === 'rag'): ?>
     <h2>📚 Vidensbase (RAG)</h2>
     <div class="card"><p>Administration af dokumenter og semantisk søgning.</p></div>
-  <?php else: ?>
+  <?php else:
+    <!-- VALGFRI / TILVALG: GITHUB FORBINDELSE -->
+    <details style="margin-top: 30px; border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; background: #fafafa;">
+      <summary style="cursor: pointer; font-weight: 600; color: #333;">🐙 Tilvalg: Central GitHub-forbindelse (Valgfri)</summary>
+      <div style="margin-top: 15px;">
+        <p style="font-size: 13px; color: #555;">Hvis I ønsker at AIen skal kunne læse kode og repositories fra GitHub, kan I indtaste en token her. Ellers fungerer alt andet i systemet 100% uafhængigt af GitHub.</p>
+        <?php $githubUsername = SettingsService::get('github_username', ''); $githubConfigured = SettingsService::getSecret('github_token') !== null; ?>
+        <form method="post">
+          <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
+          <input type="hidden" name="action" value="save_github">
+          <div class="form-grid">
+            <div>
+              <label>GitHub bruger / ejer</label>
+              <input type="text" name="github_username" value="<?= htmlspecialchars($githubUsername) ?>" placeholder="f.eks. smoeberg">
+            </div>
+            <div>
+              <label>Status</label>
+              <div style="padding:9px;background:#fff;border:1px solid #ccc;border-radius:5px; font-size:13px;"><?= $githubConfigured ? '✅ Token konfigureret' : '⚠️ Ikke konfigureret' ?></div>
+            </div>
+            <div class="full-width">
+              <label>GitHub Personal Access Token</label>
+              <input type="password" name="github_token" placeholder="<?= $githubConfigured ? '•••••••• (skift token)' : 'ghp_... / github_pat_...' ?>" autocomplete="new-password">
+            </div>
+            <div class="full-width">
+              <label><input type="checkbox" name="clear_github_token" value="1"> Fjern gemt token</label>
+            </div>
+            <div class="full-width">
+              <button type="submit" class="btn-primary" style="font-size: 13px; padding: 6px 14px;">Gem GitHub-indstilling</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </details>
+     ?>
             <div style="display: flex; flex-direction: column; gap: 12px;">
                 <?php foreach ($templates as $t): ?>
                     <div style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px;">
