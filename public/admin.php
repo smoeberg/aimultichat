@@ -2,7 +2,6 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../bootstrap.php';
 startSecureSession();
-
 use Models\User;
 use Models\Bot;
 use Core\Security;
@@ -33,20 +32,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $action = $_POST['action'] ?? '';
 
-        // --- REQUEST VERIFICATION ---
-        if (isset($_GET['action']) && $_GET['action'] === 'verify-request') {
-            require_once __DIR__ . '/../src/Http/Controllers/Admin/RequestVerificationController.php';
-            $controller = new Http\Controllers\Admin\RequestVerificationController();
-            $requestId = $_GET['requestId'] ?? '';
-            if ($requestId) {
-                header('Content-Type: application/json');
-                echo json_encode($controller->lookup($requestId, $user->id, $user->id));
-                exit;
-            }
-            echo $controller->showForm();
-            exit;
-        }
-
         // --- BRUGER HÅNDTERING ---
         if ($action === 'create_user') {
             $username = trim((string)($_POST['username'] ?? ''));
@@ -57,23 +42,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($username === '' || $name === '' || strlen($password) < 6) {
                 throw new RuntimeException('Brugernavn, Navn og en adgangskode på mindst 6 tegn er påkrævet.');
             }
-
             if (User::findByUsername($username)) {
-                throw new RuntimeException('Brugernavnet optaget. Vælg venligst et andet.');
+                throw new RuntimeException('Brugernavnet er optaget. Vælg venligst et andet.');
             }
 
             $hash = Security::hashPassword($password);
             $db = Database::getInstance();
             $stmt = $db->prepare('INSERT INTO users (name, username, password_hash, role, enabled) VALUES (?, ?, ?, ?, 1)');
             $stmt->execute([$name, $username, $hash, $role]);
-
             $success = "Brugeren '$username' blev oprettet succesfuldt!";
             $activeTab = 'users';
-        } 
+        }
         elseif ($action === 'update_user') {
             $userId = (int)($_POST['user_id'] ?? 0);
             $u = User::findById($userId);
-            if (!$u) throw new RuntimeException('Bruger blev ikke fundet.');
+            if (!$u) {
+                throw new RuntimeException('Bruger blev ikke fundet.');
+            }
 
             $role = ($_POST['role'] ?? 'user') === 'admin' ? 'admin' : 'user';
             $enabled = isset($_POST['enabled']) ? 1 : 0;
@@ -92,25 +77,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $activeTab = 'users';
         }
-
         // --- GITHUB FORBINDELSE ---
         elseif ($action === 'save_github') {
             $githubUser = trim((string)($_POST['github_username'] ?? ''));
             $githubToken = trim((string)($_POST['github_token'] ?? ''));
             $clearToken = isset($_POST['clear_github_token']);
+
             if ($githubUser === '') {
                 throw new RuntimeException('Indtast den GitHub-bruger/ejer, som forbindelsen hører til.');
             }
+
             SettingsService::put('github_username', $githubUser);
             if ($clearToken) {
                 SettingsService::put('github_token', '');
             } elseif ($githubToken !== '') {
                 SettingsService::put('github_token', $githubToken, true);
             }
-            $success = 'GitHub-forbindelsen blev gemt. Repository-adgang bruger den gemte GitHub-token.';
-            $activeTab = 'bots';
-        }
 
+            $success = 'GitHub-forbindelsen blev gemt. Repository-adgang bruger den gemte GitHub-token.';
+            $activeTab = 'templates'; // Formularen ligger i templates-fanen
+        }
         // --- STANDARD MODEL / DEFAULT BOT ---
         elseif ($action === 'save_default_bot') {
             $defaultBotKey = trim((string)($_POST['default_bot'] ?? ''));
@@ -118,7 +104,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $success = 'Standard AI-model for brugere blev opdateret!';
             $activeTab = 'bots';
         }
-
         // --- SKABELON-PROMPTS OG TONE OF VOICE HÅNDTERING ---
         elseif ($action === 'create_template') {
             \Models\PromptTemplate::create($_POST);
@@ -143,7 +128,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $success = 'Virksomhedens Tone of Voice blev opdateret!';
             $activeTab = 'templates';
         }
-
         // --- BOT HÅNDTERING ---
         elseif ($action === 'save_bot') {
             $botKey = trim((string)($_POST['bot_key'] ?? ''));
@@ -172,7 +156,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($provider === 'gpai') {
                 $gpaiUser = trim((string)($_POST['gpai_username'] ?? ''));
                 $gpaiPass = (string)($_POST['gpai_password'] ?? '');
-
                 if ($gpaiUser !== '' || $gpaiPass !== '') {
                     $configObj = ['username' => $gpaiUser, 'password' => $gpaiPass];
                     $data['config_json'] = json_encode($configObj);
@@ -200,7 +183,7 @@ $db = Database::getInstance();
 $usersStmt = $db->query('SELECT id, name, username, role, enabled, created_at FROM users ORDER BY id DESC');
 $allUsers = $usersStmt->fetchAll(PDO::FETCH_ASSOC);
 $bots = Bot::findAll(false);
-$csrf = $_SESSION['csrf_token'];
+$csrf = $_SESSION['csrf_token'] ?? '';
 ?>
 <!doctype html>
 <html lang="da">
@@ -215,7 +198,7 @@ html, body {
   min-height: 100% !important;
   margin: 0;
   padding: 0;
-  overflow-y: auto !important; /* Tvinger fuld scrollbar i browseren */
+  overflow-y: auto !important;
   background: #f4f6f8;
   font-family: system-ui, -apple-system, sans-serif;
 }
@@ -224,13 +207,13 @@ html, body {
   padding: 30px 15px;
   box-sizing: border-box;
 }
-.admin-container { 
-  max-width: 950px; 
-  margin: 0 auto; 
-  padding: 25px; 
-  background: #fff; 
-  border-radius: 8px; 
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08); 
+.admin-container {
+  max-width: 950px;
+  margin: 0 auto;
+  padding: 25px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
 }
 .admin-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
 .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #ddd; }
@@ -278,14 +261,13 @@ const BOT_PRESETS = {
 function applyPreset(presetKey, prefix) {
   if (!presetKey || !BOT_PRESETS[presetKey]) return;
   const p = BOT_PRESETS[presetKey];
-  
+
   document.getElementById(prefix + '_bot_key').value = presetKey;
   document.getElementById(prefix + '_name').value = p.name;
   document.getElementById(prefix + '_provider').value = p.provider;
   document.getElementById(prefix + '_model').value = p.model;
   document.getElementById(prefix + '_endpoint').value = p.endpoint;
   document.getElementById(prefix + '_prompt').value = p.prompt;
-
   toggleProviderFields(document.getElementById(prefix + '_provider'), prefix);
 }
 
@@ -293,7 +275,7 @@ function toggleProviderFields(selectElem, prefix) {
     const provider = selectElem.value;
     const gpaiBox = document.getElementById(prefix + '_gpai_box');
     const apiBox = document.getElementById(prefix + '_api_box');
-    
+
     if (provider === 'gpai') {
         if (gpaiBox) gpaiBox.style.display = 'block';
         if (apiBox) apiBox.style.display = 'none';
@@ -355,7 +337,7 @@ function toggleProviderFields(selectElem, prefix) {
         <form method="post" style="margin-bottom: 30px; background: var(--bg-main); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color);">
             <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="action" value="create_template">
-            
+
             <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                 <div>
                     <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Titel på skabelon</label>
@@ -374,18 +356,17 @@ function toggleProviderFields(selectElem, prefix) {
                     </select>
                 </div>
             </div>
-            
+
             <div style="margin-bottom: 12px;">
                 <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Prompt-tekst (Brug <code>{Stilling}</code> eller <code>{Afdeling}</code> til dynamiske felter)</label>
                 <textarea name="prompt_text" rows="4" placeholder="Skriv en professionel jobannonce for en {Stilling} i afdelingen {Afdeling} med primære ansvarsområder: {Ansvarsomraader}..." required style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; font-family: inherit;"></textarea>
             </div>
-
             <button type="submit" class="btn-primary" style="padding: 8px 16px; font-size: 13px;">Opret skabelon-prompt</button>
         </form>
 
         <!-- Liste over eksisterende skabeloner & Analytics -->
         <h3 style="font-size: 15px; margin-bottom: 12px; font-weight: 600;">Eksisterende skabelon-prompts & Anvendelse (Analytics)</h3>
-        
+
         <?php $templates = \Models\PromptTemplate::findAll(); if (empty($templates)): ?>
             <p style="color: var(--text-muted); font-size: 13px;">Ingen skabelon-prompts oprettet endnu.</p>
         <?php else: ?>
@@ -393,35 +374,34 @@ function toggleProviderFields(selectElem, prefix) {
                 <?php foreach ($templates as $t): ?>
                     <div style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="font-size: 12px; background: var(--primary-soft); color: var(--primary-color); padding: 2px 8px; border-radius: 4px; font-weight: 600;"><?= htmlspecialchars($t->category) ?></span>
-                            <span style="font-size: 12px; color: var(--text-muted);">📊 Anvendt <strong><?= $t->usageCount ?? 0 ?></strong> gange</span>
+                            <span style="font-size: 12px; background: var(--primary-soft); color: var(--primary-color); padding: 2px 8px; border-radius: 4px; font-weight: 600;"><?= htmlspecialchars($t->category ?? '', ENT_QUOTES, 'UTF-8') ?></span>
+                            <span style="font-size: 12px; color: var(--text-muted);">📊 Anvendt <strong><?= (int)($t->usageCount ?? 0) ?></strong> gange</span>
                         </div>
-                        
+
                         <form method="post">
                             <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                             <input type="hidden" name="action" value="update_template">
-                            <input type="hidden" name="template_id" value="<?= $t->id ?>">
-
+                            <input type="hidden" name="template_id" value="<?= (int)$t->id ?>">
                             <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 12px; margin-bottom: 8px;">
-                                <input type="text" name="title" value="<?= htmlspecialchars($t->title, ENT_QUOTES, 'UTF-8') ?>" required style="padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; font-weight: 600;">
-                                <input type="text" name="category" value="<?= htmlspecialchars($t->category, ENT_QUOTES, 'UTF-8') ?>" required style="padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px;">
+                                <input type="text" name="title" value="<?= htmlspecialchars($t->title ?? '', ENT_QUOTES, 'UTF-8') ?>" required style="padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; font-weight: 600;">
+                                <input type="text" name="category" value="<?= htmlspecialchars($t->category ?? '', ENT_QUOTES, 'UTF-8') ?>" required style="padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px;">
                                 <select name="target_role" style="padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px;">
-                                    <option value="all" <?= $t->targetRole==='all'?'selected':'' ?>>Alle</option>
-                                    <option value="admin" <?= $t->targetRole==='admin'?'selected':'' ?>>Kun Admin</option>
-                                    <option value="user" <?= $t->targetRole==='user'?'selected':'' ?>>Brugere</option>
+                                    <option value="all" <?= ($t->targetRole ?? '') === 'all' ? 'selected' : '' ?>>Alle</option>
+                                    <option value="admin" <?= ($t->targetRole ?? '') === 'admin' ? 'selected' : '' ?>>Kun Admin</option>
+                                    <option value="user" <?= ($t->targetRole ?? '') === 'user' ? 'selected' : '' ?>>Brugere</option>
                                 </select>
                                 <button type="submit" class="btn-primary" style="padding: 6px 12px; font-size: 12px;">Gem</button>
                             </div>
                             <div style="margin-bottom: 8px;">
-                                <textarea name="prompt_text" rows="3" required style="width: 100%; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; font-family: inherit;"><?= htmlspecialchars($t->promptText, ENT_NOQUOTES, 'UTF-8') ?></textarea>
+                                <textarea name="prompt_text" rows="3" required style="width: 100%; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; font-family: inherit;"><?= htmlspecialchars($t->promptText ?? '', ENT_NOQUOTES, 'UTF-8') ?></textarea>
                             </div>
                         </form>
-                        
+
                         <div style="display: flex; justify-content: flex-end;">
                             <form method="post" onsubmit="return confirm('Er du sikker på, at du vil slette denne skabelon-prompt?');">
                                 <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                                 <input type="hidden" name="action" value="delete_template">
-                                <input type="hidden" name="template_id" value="<?= $t->id ?>">
+                                <input type="hidden" name="template_id" value="<?= (int)$t->id ?>">
                                 <button type="submit" style="background: none; border: none; color: #dc2626; font-size: 12px; cursor: pointer; font-weight: 500;">Slet skabelon</button>
                             </form>
                         </div>
@@ -430,20 +410,23 @@ function toggleProviderFields(selectElem, prefix) {
             </div>
         <?php endif; ?>
     </div>
-    
+
     <!-- VALGFRI / TILVALG: GITHUB FORBINDELSE -->
     <details style="margin-top: 30px; border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; background: #fafafa;">
       <summary style="cursor: pointer; font-weight: 600; color: #333;">🐙 Tilvalg: Central GitHub-forbindelse (Valgfri)</summary>
       <div style="margin-top: 15px;">
         <p style="font-size: 13px; color: #555;">Hvis I ønsker at AIen skal kunne læse kode og repositories fra GitHub, kan I indtaste en token her. Ellers fungerer alt andet i systemet 100% uafhængigt af GitHub.</p>
-        <?php $githubUsername = SettingsService::get('github_username', ''); $githubConfigured = SettingsService::getSecret('github_token') !== null; ?>
+        <?php
+          $githubUsername = SettingsService::get('github_username', '');
+          $githubConfigured = SettingsService::getSecret('github_token') !== null;
+        ?>
         <form method="post">
           <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
           <input type="hidden" name="action" value="save_github">
           <div class="form-grid">
             <div>
               <label>GitHub bruger / ejer</label>
-              <input type="text" name="github_username" value="<?= htmlspecialchars($githubUsername) ?>" placeholder="f.eks. smoeberg">
+              <input type="text" name="github_username" value="<?= htmlspecialchars($githubUsername, ENT_QUOTES, 'UTF-8') ?>" placeholder="f.eks. smoeberg">
             </div>
             <div>
               <label>Status</label>
@@ -513,24 +496,24 @@ function toggleProviderFields(selectElem, prefix) {
       <tbody>
         <?php foreach ($allUsers as $u): ?>
           <tr>
-            <td><?= $u['id'] ?></td>
-            <td><strong><?= htmlspecialchars($u['username'] ?? '–') ?></strong></td>
-            <td><?= htmlspecialchars($u['name']) ?></td>
-            <td><span class="badge <?= $u['role']==='admin'?'badge-admin':'badge-user' ?>"><?= strtoupper($u['role']) ?></span></td>
-            <td><span class="badge <?= $u['enabled']?'badge-active':'badge-disabled' ?>"><?= $u['enabled']?'Aktiv':'Deaktiveret' ?></span></td>
+            <td><?= (int)$u['id'] ?></td>
+            <td><strong><?= htmlspecialchars($u['username'] ?? '–', ENT_QUOTES, 'UTF-8') ?></strong></td>
+            <td><?= htmlspecialchars($u['name'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+            <td><span class="badge <?= ($u['role'] ?? '') === 'admin' ? 'badge-admin' : 'badge-user' ?>"><?= strtoupper(htmlspecialchars($u['role'] ?? 'user', ENT_QUOTES, 'UTF-8')) ?></span></td>
+            <td><span class="badge <?= !empty($u['enabled']) ? 'badge-active' : 'badge-disabled' ?>"><?= !empty($u['enabled']) ? 'Aktiv' : 'Deaktiveret' ?></span></td>
             <td>
               <details>
                 <summary style="cursor:pointer; color:#0070f3; font-weight:600;">Redigér</summary>
                 <form method="post" style="margin-top:10px; background:#fff; padding:10px; border:1px solid #ccc; border-radius:5px;">
                   <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                   <input type="hidden" name="action" value="update_user">
-                  <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
+                  <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
                   <div class="form-grid">
                     <div>
                       <label>Rolle</label>
                       <select name="role">
-                        <option value="user" <?= $u['role']==='user'?'selected':'' ?>>Almindelig Bruger</option>
-                        <option value="admin" <?= $u['role']==='admin'?'selected':'' ?>>Administrator</option>
+                        <option value="user" <?= ($u['role'] ?? '') === 'user' ? 'selected' : '' ?>>Almindelig Bruger</option>
+                        <option value="admin" <?= ($u['role'] ?? '') === 'admin' ? 'selected' : '' ?>>Administrator</option>
                       </select>
                     </div>
                     <div>
@@ -538,7 +521,7 @@ function toggleProviderFields(selectElem, prefix) {
                       <input type="password" name="new_password" placeholder="Skriv ny adgangskode" minlength="6">
                     </div>
                     <div class="full-width">
-                      <label><input type="checkbox" name="enabled" value="1" <?= $u['enabled']?'checked':'' ?>> Bruger er aktiv</label>
+                      <label><input type="checkbox" name="enabled" value="1" <?= !empty($u['enabled']) ? 'checked' : '' ?>> Bruger er aktiv</label>
                     </div>
                     <div class="full-width">
                       <button type="submit" class="btn-primary" style="padding:6px 12px; font-size:0.85rem;">Gem Ændringer</button>
@@ -557,14 +540,14 @@ function toggleProviderFields(selectElem, prefix) {
     <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
       Realtids-statistik over forbrug, antal beskeder, aktive brugere og estimerede AI-omkostninger.
     </p>
-    
+
     <?php
-    $db = \Database::getInstance();
-    $userCount = $db->query("SELECT COUNT(*) FROM users")->fetchColumn() ?: 0;
-    $chatCount = $db->query("SELECT COUNT(*) FROM chats")->fetchColumn() ?: 0;
-    $messageCount = $db->query("SELECT COUNT(*) FROM messages")->fetchColumn() ?: 0;
+    $db = Database::getInstance();
+    $userCount = (int)($db->query("SELECT COUNT(*) FROM users")->fetchColumn() ?: 0);
+    $chatCount = (int)($db->query("SELECT COUNT(*) FROM chats")->fetchColumn() ?: 0);
+    $messageCount = (int)($db->query("SELECT COUNT(*) FROM messages")->fetchColumn() ?: 0);
     $estTokens = $messageCount * 450;
-    $estCostDKK = number_format(($estTokens / 1000) * 0.03, 2);
+    $estCostDKK = number_format(($estTokens / 1000) * 0.03, 2, ',', '.');
     ?>
 
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
@@ -577,11 +560,11 @@ function toggleProviderFields(selectElem, prefix) {
         <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Samtaler Oprettet</div>
       </div>
       <div class="card" style="text-align: center;">
-        <div style="font-size: 28px; font-weight: 700; color: #16a34a;"><?= number_format($messageCount) ?></div>
+        <div style="font-size: 28px; font-weight: 700; color: #16a34a;"><?= number_format($messageCount, 0, ',', '.') ?></div>
         <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Total Beskeder Udvekslet</div>
       </div>
       <div class="card" style="text-align: center;">
-        <div style="font-size: 28px; font-weight: 700; color: #d97706;"><?= number_format($estTokens) ?></div>
+        <div style="font-size: 28px; font-weight: 700; color: #d97706;"><?= number_format($estTokens, 0, ',', '.') ?></div>
         <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Est. Forbrugte Tokens</div>
       </div>
     </div>
@@ -606,7 +589,10 @@ function toggleProviderFields(selectElem, prefix) {
     $uploadDir = __DIR__ . '/../storage/uploads';
     $files = [];
     if (is_dir($uploadDir)) {
-        $files = array_diff(scandir($uploadDir), [".", ".."]);
+        $scanned = scandir($uploadDir);
+        if ($scanned !== false) {
+            $files = array_values(array_diff($scanned, ['.', '..']));
+        }
     }
     ?>
 
@@ -618,8 +604,8 @@ function toggleProviderFields(selectElem, prefix) {
         <ul style="list-style: none; padding: 0;">
           <?php foreach ($files as $file): ?>
             <li style="padding: 8px 12px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 14px;">
-              <span>📄 <?= htmlspecialchars($file) ?></span>
-              <span style="font-size: 12px; color: var(--text-muted);"><?= date("d-m-Y H:i", filemtime($uploadDir . '/' . $file)) ?></span>
+              <span>📄 <?= htmlspecialchars($file, ENT_QUOTES, 'UTF-8') ?></span>
+              <span style="font-size: 12px; color: var(--text-muted);"><?= date('d-m-Y H:i', filemtime($uploadDir . '/' . $file)) ?></span>
             </li>
           <?php endforeach; ?>
         </ul>
@@ -651,8 +637,8 @@ function toggleProviderFields(selectElem, prefix) {
             <label style="font-weight:600; margin-bottom:6px; display:block;">Vælg Standard Model</label>
             <select name="default_bot" style="width:100%; padding:9px 12px; border-radius:6px; border:1px solid #ccc; font-weight:600;">
               <?php foreach ($bots as $b): ?>
-                <option value="<?= htmlspecialchars($b->botKey) ?>" <?= $b->botKey === $currentDefaultBot ? 'selected' : '' ?>>
-                  <?= htmlspecialchars($b->name) ?> (<?= htmlspecialchars($b->botKey) ?>) <?= $b->isConfigured() ? '✅' : '⚠️ ikke konfigureret' ?>
+                <option value="<?= htmlspecialchars($b->botKey, ENT_QUOTES, 'UTF-8') ?>" <?= $b->botKey === $currentDefaultBot ? 'selected' : '' ?>>
+                  <?= htmlspecialchars($b->name, ENT_QUOTES, 'UTF-8') ?> (<?= htmlspecialchars($b->botKey, ENT_QUOTES, 'UTF-8') ?>) <?= $b->isConfigured() ? '✅' : '⚠️ ikke konfigureret' ?>
                 </option>
               <?php endforeach; ?>
             </select>
@@ -753,38 +739,35 @@ function toggleProviderFields(selectElem, prefix) {
     </div>
 
     <h2>Konfigurerede AI Bots</h2>
-    <?php foreach ($bots as $b): 
+    <?php foreach ($bots as $b):
       $cfg = json_decode($b->getDecryptedConfig() ?? '{}', true) ?: [];
       $gpaiUser = $cfg['username'] ?? '';
       $keyStatus = method_exists($b, 'getKeyStatus') ? $b->getKeyStatus() : ($b->isConfigured() ? 'VALID' : 'MISSING');
     ?>
       <div class="card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <h3 style="margin:0;"><?= htmlspecialchars($b->name) ?> <small style="font-size:0.8rem; color:#666;">(<?= htmlspecialchars($b->botKey) ?>)</small></h3>
-          <span class="preset-badge"><?= strtoupper(htmlspecialchars($b->provider)) ?></span>
+          <h3 style="margin:0;"><?= htmlspecialchars($b->name, ENT_QUOTES, 'UTF-8') ?> <small style="font-size:0.8rem; color:#666;">(<?= htmlspecialchars($b->botKey, ENT_QUOTES, 'UTF-8') ?>)</small></h3>
+          <span class="preset-badge"><?= strtoupper(htmlspecialchars($b->provider, ENT_QUOTES, 'UTF-8')) ?></span>
         </div>
         <p style="margin: 8px 0 0 0; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-          <strong>Model:</strong> <code><?= htmlspecialchars($b->model) ?></code> | 
+          <strong>Model:</strong> <code><?= htmlspecialchars($b->model, ENT_QUOTES, 'UTF-8') ?></code> |
           <strong>Status:</strong>
-          <?php switch ($keyStatus): 
+          <?php switch ($keyStatus):
               case 'VALID': ?>
                   <span class="badge badge-active" title="Nøglen er aktiv og afkodes med den nuværende primære ENCRYPTION_KEY">
                       ✓ Aktiv
                   </span>
                   <?php break; ?>
-
               case 'MIGRATED': ?>
                   <span class="badge badge-migrated" title="Nøglen blev afkodet via gammel nøgle og gen-krypteret med primær nøgle">
                       🔄 Migreret
                   </span>
                   <?php break; ?>
-
               case 'UNREADABLE': ?>
                   <span class="badge badge-unreadable" title="Ugyldig nøgle: Kan hverken afkodes med primær eller gammel .env nøgle!">
                       ⚠️ Uafkodelig (Kræver gen-indtastning)
                   </span>
                   <?php break; ?>
-
               default: ?>
                   <span class="badge badge-missing" title="Ingen API-nøgle eller login er indtastet">
                       Ikke konfigureret
@@ -799,47 +782,47 @@ function toggleProviderFields(selectElem, prefix) {
           <form method="post" style="margin-top:12px;">
             <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="action" value="save_bot">
-            <input type="hidden" name="bot_key" value="<?= htmlspecialchars($b->botKey) ?>">
+            <input type="hidden" name="bot_key" value="<?= htmlspecialchars($b->botKey, ENT_QUOTES, 'UTF-8') ?>">
             <div class="form-grid">
               <div>
                 <label>Vist Navn</label>
-                <input type="text" name="name" value="<?= htmlspecialchars($b->name) ?>" required>
+                <input type="text" name="name" value="<?= htmlspecialchars($b->name, ENT_QUOTES, 'UTF-8') ?>" required>
               </div>
               <div>
                 <label>Provider</label>
-                <select name="provider" onchange="toggleProviderFields(this, 'edit_<?= $b->id ?>')">
-                  <option value="openai" <?= $b->provider==='openai'?'selected':'' ?>>OpenAI / Kompatibel</option>
-                  <option value="claude" <?= $b->provider==='claude'?'selected':'' ?>>Anthropic Claude</option>
-                  <option value="mistral" <?= $b->provider==='mistral'?'selected':'' ?>>Mistral AI</option>
-                  <option value="gemini" <?= $b->provider==='gemini'?'selected':'' ?>>Google Gemini</option>
-                  <option value="deepseek" <?= $b->provider==='deepseek'?'selected':'' ?>>DeepSeek</option>
-                  <option value="rool" <?= $b->provider==='rool'?'selected':'' ?>>Rool AI</option>
-                  <option value="gpai" <?= $b->provider==='gpai'?'selected':'' ?>>GPAI (Brugernavn & Adgangskode)</option>
-                  <option value="librechat" <?= $b->provider==='librechat'?'selected':'' ?>>LibreChat Agent (OpenAI-kompatibel)</option>
+                <select name="provider" onchange="toggleProviderFields(this, 'edit_<?= (int)$b->id ?>')">
+                  <option value="openai" <?= $b->provider === 'openai' ? 'selected' : '' ?>>OpenAI / Kompatibel</option>
+                  <option value="claude" <?= $b->provider === 'claude' ? 'selected' : '' ?>>Anthropic Claude</option>
+                  <option value="mistral" <?= $b->provider === 'mistral' ? 'selected' : '' ?>>Mistral AI</option>
+                  <option value="gemini" <?= $b->provider === 'gemini' ? 'selected' : '' ?>>Google Gemini</option>
+                  <option value="deepseek" <?= $b->provider === 'deepseek' ? 'selected' : '' ?>>DeepSeek</option>
+                  <option value="rool" <?= $b->provider === 'rool' ? 'selected' : '' ?>>Rool AI</option>
+                  <option value="gpai" <?= $b->provider === 'gpai' ? 'selected' : '' ?>>GPAI (Brugernavn & Adgangskode)</option>
+                  <option value="librechat" <?= $b->provider === 'librechat' ? 'selected' : '' ?>>LibreChat Agent (OpenAI-kompatibel)</option>
                 </select>
               </div>
               <div>
                 <label>Model ID / Agent ID</label>
-                <input type="text" name="model" value="<?= htmlspecialchars($b->model) ?>" required>
+                <input type="text" name="model" value="<?= htmlspecialchars($b->model, ENT_QUOTES, 'UTF-8') ?>" required>
               </div>
               <div class="full-width">
                 <label>Endpoint URL</label>
-                <input type="text" name="endpoint" value="<?= htmlspecialchars($b->endpoint) ?>" required>
+                <input type="text" name="endpoint" value="<?= htmlspecialchars($b->endpoint, ENT_QUOTES, 'UTF-8') ?>" required>
               </div>
 
               <!-- Standard API key -->
-              <div class="full-width" id="edit_<?= $b->id ?>_api_box" style="<?= $b->provider==='gpai'?'display:none;':'' ?>">
+              <div class="full-width" id="edit_<?= (int)$b->id ?>_api_box" style="<?= $b->provider === 'gpai' ? 'display:none;' : '' ?>">
                 <label>API Key / Nøgle (efterlad blank for uændret)</label>
                 <input type="password" name="api_key" placeholder="<?= $b->isConfigured() ? '•••••••• (skriv ny for at ændre)' : 'Indtast din API Key' ?>">
               </div>
 
               <!-- GPAI Auth -->
-              <div class="full-width gpai-box" id="edit_<?= $b->id ?>_gpai_box" style="<?= $b->provider==='gpai'?'':'display:none;' ?>">
+              <div class="full-width gpai-box" id="edit_<?= (int)$b->id ?>_gpai_box" style="<?= $b->provider === 'gpai' ? '' : 'display:none;' ?>">
                 <p style="margin:0 0 8px 0; font-weight:bold; color:#0070f3;">🔐 GPAI Legitimationsoplysninger</p>
                 <div class="form-grid">
                   <div>
                     <label>GPAI Brugernavn</label>
-                    <input type="text" name="gpai_username" value="<?= htmlspecialchars($gpaiUser) ?>" placeholder="bruger@domæne.dk">
+                    <input type="text" name="gpai_username" value="<?= htmlspecialchars($gpaiUser, ENT_QUOTES, 'UTF-8') ?>" placeholder="bruger@domæne.dk">
                   </div>
                   <div>
                     <label>GPAI Adgangskode / Password</label>
@@ -850,13 +833,13 @@ function toggleProviderFields(selectElem, prefix) {
 
               <div class="full-width">
                 <label>System Prompt</label>
-                <textarea name="system_prompt" rows="2"><?= htmlspecialchars($b->systemPrompt ?? '') ?></textarea>
+                <textarea name="system_prompt" rows="2"><?= htmlspecialchars($b->systemPrompt ?? '', ENT_NOQUOTES, 'UTF-8') ?></textarea>
               </div>
               <div>
                 <label><input type="checkbox" name="enabled" value="1" <?= $b->enabled ? 'checked' : '' ?>> Aktiv for brugere</label>
               </div>
               <div class="full-width">
-                <button type="submit" class="btn-primary">Gem Ændringer for <?= htmlspecialchars($b->name) ?></button>
+                <button type="submit" class="btn-primary">Gem Ændringer for <?= htmlspecialchars($b->name, ENT_QUOTES, 'UTF-8') ?></button>
               </div>
             </div>
           </form>
