@@ -302,18 +302,27 @@ class MultiChatApp {
                 return;
             }
             
-            this.chatList.innerHTML = data.chats.map(chat => `
-                <div class="chat-item ${chat.id === this.chatId ? 'active' : ''}" data-id="${chat.id}">
-                    ${this.escapeHtml(chat.title === 'New chat' ? 'Ny chat' : (chat.title || 'Ny chat'))}
+                        this.chatList.innerHTML = data.chats.map(chat => `
+                <div class="chat-item ${chat.id === this.chatId ? 'active' : '}' data-id="${chat.id}" style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(chat.title === 'New chat' ? 'Ny chat' : (chat.title || 'Ny chat'))}</span>
+                    <button type="button" class="delete-chat-btn" data-id="${chat.id}" title="Slet chat" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#9ca3af'">×</button>
                 </div>
             `).join('');
             
             this.chatList.querySelectorAll('.chat-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    this.loadChat(parseInt(item.dataset.id));
+                const chatId = parseInt(item.dataset.id);
+                item.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('delete-chat-btn')) return;
+                    this.loadChat(chatId);
                 });
             });
-            
+
+            this.chatList.querySelectorAll('.delete-chat-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.deleteChat(parseInt(btn.dataset.id));
+                });
+            });
             this.highlightChat(this.chatId);
             
         } catch (error) {
@@ -327,7 +336,57 @@ class MultiChatApp {
             item.classList.toggle('active', parseInt(item.dataset.id) === id);
         });
     }
+
+    async deleteChat(chatId) {
+        if (!confirm('Er du sikker på, at du vil slette denne chat?')) return;
+        try {
+            const response = await fetch('?api=delete_chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': this.csrfToken
+                },
+                body: JSON.stringify({ chat_id: chatId }),
+                credentials: 'same-origin'
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Kunne ikke slette chat');
+            
+            if (this.chatId === chatId) {
+                this.createNewChat();
+            } else {
+                this.refreshChats();
+            }
+        } catch (error) {
+            this.showError(error.message);
+        }
+    }
     
+    async deleteChat(chatId) {
+        if (!confirm('Er du sikker på, at du vil slette denne chat?')) return;
+        try {
+            const response = await fetch('?api=delete_chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': this.csrfToken
+                },
+                body: JSON.stringify({ chat_id: chatId }),
+                credentials: 'same-origin'
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Kunne ikke slette chat');
+            
+            if (this.chatId === chatId) {
+                this.createNewChat();
+            } else {
+                this.refreshChats();
+            }
+        } catch (error) {
+            this.showError(error.message);
+        }
+    }
+
     async createNewChat() {
         this.setLoading(true);
         try {

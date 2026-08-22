@@ -39,6 +39,9 @@ if (isset($_GET['api'])) {
         case 'load':
             if ($_SERVER['REQUEST_METHOD'] === 'GET') { $api->loadChat((int)($_GET['id'] ?? 0)); exit; }
             break;
+        case 'delete_chat':
+            if ($_SERVER[REQUEST_METHOD] === 'POST') { $api->deleteChat(); exit; }
+            break;
         case 'upload_file':
             if ($_SERVER['REQUEST_METHOD'] === 'POST') { $api->uploadFile(); exit; }
             break;

@@ -203,6 +203,23 @@ final class ApiController {
         exit;
     }
 
+    public function deleteChat(): void {
+        try {
+            Security::requireCsrfHeader();
+            $input = json_decode(file_get_contents('php://input'), true) ?: [];
+            $chatId = (int)($input['chat_id'] ?? 0);
+            $chat = Chat::findById($chatId);
+            if (!$chat || $chat->userId !== $this->user->id) {
+                $this->json(['error' => 'Chat ikke fundet eller ingen adgang.'], 404);
+                return;
+            }
+            $chat->delete();
+            $this->json(['success' => true]);
+        } catch (\Throwable $e) {
+            $this->json(['error' => $e->getMessage()], 400);
+        }
+    }
+
     public function uploadFile(): void {
         try {
             Security::requireCsrfHeader();
