@@ -108,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 SettingsService::put('github_token', $githubToken, true);
             }
             $success = 'GitHub-forbindelsen blev gemt. Repository-adgang bruger den gemte GitHub-token.';
-            $activeTab = 'github';
+            $activeTab = 'bots';
         }
 
         // --- STANDARD MODEL / DEFAULT BOT ---
@@ -438,7 +438,7 @@ function toggleProviderFields(selectElem, prefix) {
         <p style="font-size: 13px; color: #555;">Hvis I ønsker at AIen skal kunne læse kode og repositories fra GitHub, kan I indtaste en token her. Ellers fungerer alt andet i systemet 100% uafhængigt af GitHub.</p>
         <?php $githubUsername = SettingsService::get('github_username', ''); $githubConfigured = SettingsService::getSecret('github_token') !== null; ?>
         <form method="post">
-          <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
+          <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
           <input type="hidden" name="action" value="save_github">
           <div class="form-grid">
             <div>
@@ -469,7 +469,7 @@ function toggleProviderFields(selectElem, prefix) {
     <h2>Opret Ny Bruger</h2>
     <div class="card">
       <form method="post">
-        <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
+        <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="action" value="create_user">
         <div class="form-grid">
           <div>
@@ -522,7 +522,7 @@ function toggleProviderFields(selectElem, prefix) {
               <details>
                 <summary style="cursor:pointer; color:#0070f3; font-weight:600;">Redigér</summary>
                 <form method="post" style="margin-top:10px; background:#fff; padding:10px; border:1px solid #ccc; border-radius:5px;">
-                  <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
+                  <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                   <input type="hidden" name="action" value="update_user">
                   <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
                   <div class="form-grid">
@@ -644,7 +644,7 @@ function toggleProviderFields(selectElem, prefix) {
       <p style="margin-top:0; color:#555;">Vælg hvilken AI-model der automatisk skal være forvalgt for alle brugere, når de åbner chatten eller starter en ny samtale.</p>
       <?php $currentDefaultBot = SettingsService::get('default_bot', 'gpt-4o'); ?>
       <form method="post">
-        <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
+        <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="action" value="save_default_bot">
         <div style="display:flex; gap:12px; align-items:flex-end; max-width:600px;">
           <div style="flex:1;">
@@ -683,7 +683,7 @@ function toggleProviderFields(selectElem, prefix) {
       </div>
 
       <form method="post">
-        <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
+        <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="action" value="save_bot">
         <div class="form-grid">
           <div>
@@ -797,7 +797,7 @@ function toggleProviderFields(selectElem, prefix) {
         <details style="margin-top:12px;">
           <summary style="cursor:pointer; color:#0070f3; font-weight:600;">Redigér Indstillinger & Adgangsnøgle</summary>
           <form method="post" style="margin-top:12px;">
-            <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
+            <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="action" value="save_bot">
             <input type="hidden" name="bot_key" value="<?= htmlspecialchars($b->botKey) ?>">
             <div class="form-grid">
