@@ -559,7 +559,7 @@ function toggleProviderFields(selectElem, prefix) {
     </p>
     
     <?php
-    $db = \Database::getConnection();
+    $db = \Database::getInstance();
     $userCount = $db->query("SELECT COUNT(*) FROM users")->fetchColumn() ?: 0;
     $chatCount = $db->query("SELECT COUNT(*) FROM chats")->fetchColumn() ?: 0;
     $messageCount = $db->query("SELECT COUNT(*) FROM messages")->fetchColumn() ?: 0;
@@ -606,7 +606,7 @@ function toggleProviderFields(selectElem, prefix) {
     $uploadDir = __DIR__ . '/../storage/uploads';
     $files = [];
     if (is_dir($uploadDir)) {
-        $files = array_diff(scandir($uploadDir), [., ..]);
+        $files = array_diff(scandir($uploadDir), [".", ".."]);
     }
     ?>
 
