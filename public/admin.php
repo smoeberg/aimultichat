@@ -781,7 +781,6 @@ function toggleProviderFields(selectElem, prefix) {
         </details>
       </div>
     <?php endforeach; ?>
-  <?php endif; ?>
 </div>
 </div>
 </body>
