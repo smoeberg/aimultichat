@@ -388,52 +388,13 @@ function toggleProviderFields(selectElem, prefix) {
         
         <?php $templates = \Models\PromptTemplate::findAll(); if (empty($templates)): ?>
             <p style="color: var(--text-muted); font-size: 13px;">Ingen skabelon-prompts oprettet endnu.</p>
-        <?php elseif ($activeTab === 'analytics'): ?>
-    <h2>📊 Forbrug & Cost</h2>
-    <div class="card"><p>Token-forbrug og statistik for organisationen.</p></div>
-  <?php elseif ($activeTab === 'rag'): ?>
-    <h2>📚 Vidensbase (RAG)</h2>
-    <div class="card"><p>Administration af dokumenter og semantisk søgning.</p></div>
-  <?php else:
-    <!-- VALGFRI / TILVALG: GITHUB FORBINDELSE -->
-    <details style="margin-top: 30px; border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; background: #fafafa;">
-      <summary style="cursor: pointer; font-weight: 600; color: #333;">🐙 Tilvalg: Central GitHub-forbindelse (Valgfri)</summary>
-      <div style="margin-top: 15px;">
-        <p style="font-size: 13px; color: #555;">Hvis I ønsker at AIen skal kunne læse kode og repositories fra GitHub, kan I indtaste en token her. Ellers fungerer alt andet i systemet 100% uafhængigt af GitHub.</p>
-        <?php $githubUsername = SettingsService::get('github_username', ''); $githubConfigured = SettingsService::getSecret('github_token') !== null; ?>
-        <form method="post">
-          <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
-          <input type="hidden" name="action" value="save_github">
-          <div class="form-grid">
-            <div>
-              <label>GitHub bruger / ejer</label>
-              <input type="text" name="github_username" value="<?= htmlspecialchars($githubUsername) ?>" placeholder="f.eks. smoeberg">
-            </div>
-            <div>
-              <label>Status</label>
-              <div style="padding:9px;background:#fff;border:1px solid #ccc;border-radius:5px; font-size:13px;"><?= $githubConfigured ? '✅ Token konfigureret' : '⚠️ Ikke konfigureret' ?></div>
-            </div>
-            <div class="full-width">
-              <label>GitHub Personal Access Token</label>
-              <input type="password" name="github_token" placeholder="<?= $githubConfigured ? '•••••••• (skift token)' : 'ghp_... / github_pat_...' ?>" autocomplete="new-password">
-            </div>
-            <div class="full-width">
-              <label><input type="checkbox" name="clear_github_token" value="1"> Fjern gemt token</label>
-            </div>
-            <div class="full-width">
-              <button type="submit" class="btn-primary" style="font-size: 13px; padding: 6px 14px;">Gem GitHub-indstilling</button>
-            </div>
-          </div>
-        </form>
-      </div>
-    </details>
-     ?>
+        <?php else: ?>
             <div style="display: flex; flex-direction: column; gap: 12px;">
                 <?php foreach ($templates as $t): ?>
                     <div style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <span style="font-size: 12px; background: var(--primary-soft); color: var(--primary-color); padding: 2px 8px; border-radius: 4px; font-weight: 600;"><?= htmlspecialchars($t->category) ?></span>
-                            <span style="font-size: 12px; color: var(--text-muted);">📊 Anvendt <strong><?= $t->usageCount ?></strong> gange</span>
+                            <span style="font-size: 12px; color: var(--text-muted);">📊 Anvendt <strong><?= $t->usageCount ?? 0 ?></strong> gange</span>
                         </div>
                         
                         <form method="post">
@@ -469,7 +430,41 @@ function toggleProviderFields(selectElem, prefix) {
             </div>
         <?php endif; ?>
     </div>
-<?php elseif ($activeTab === 'users'): ?>
+    
+    <!-- VALGFRI / TILVALG: GITHUB FORBINDELSE -->
+    <details style="margin-top: 30px; border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; background: #fafafa;">
+      <summary style="cursor: pointer; font-weight: 600; color: #333;">🐙 Tilvalg: Central GitHub-forbindelse (Valgfri)</summary>
+      <div style="margin-top: 15px;">
+        <p style="font-size: 13px; color: #555;">Hvis I ønsker at AIen skal kunne læse kode og repositories fra GitHub, kan I indtaste en token her. Ellers fungerer alt andet i systemet 100% uafhængigt af GitHub.</p>
+        <?php $githubUsername = SettingsService::get('github_username', ''); $githubConfigured = SettingsService::getSecret('github_token') !== null; ?>
+        <form method="post">
+          <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
+          <input type="hidden" name="action" value="save_github">
+          <div class="form-grid">
+            <div>
+              <label>GitHub bruger / ejer</label>
+              <input type="text" name="github_username" value="<?= htmlspecialchars($githubUsername) ?>" placeholder="f.eks. smoeberg">
+            </div>
+            <div>
+              <label>Status</label>
+              <div style="padding:9px;background:#fff;border:1px solid #ccc;border-radius:5px; font-size:13px;"><?= $githubConfigured ? '✅ Token konfigureret' : '⚠️ Ikke konfigureret' ?></div>
+            </div>
+            <div class="full-width">
+              <label>GitHub Personal Access Token</label>
+              <input type="password" name="github_token" placeholder="<?= $githubConfigured ? '•••••••• (skift token)' : 'ghp_... / github_pat_...' ?>" autocomplete="new-password">
+            </div>
+            <div class="full-width">
+              <label><input type="checkbox" name="clear_github_token" value="1"> Fjern gemt token</label>
+            </div>
+            <div class="full-width">
+              <button type="submit" class="btn-primary" style="font-size: 13px; padding: 6px 14px;">Gem GitHub-indstilling</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </details>
+
+  <?php elseif ($activeTab === 'users'): ?>
     <!-- BRUGERADMINISTRATION -->
     <h2>Opret Ny Bruger</h2>
     <div class="card">
@@ -556,6 +551,14 @@ function toggleProviderFields(selectElem, prefix) {
         <?php endforeach; ?>
       </tbody>
     </table>
+
+  <?php elseif ($activeTab === 'analytics'): ?>
+    <h2>📊 Forbrug & Cost</h2>
+    <div class="card"><p>Token-forbrug og statistik for organisationen.</p></div>
+
+  <?php elseif ($activeTab === 'rag'): ?>
+    <h2>📚 Vidensbase (RAG)</h2>
+    <div class="card"><p>Administration af dokumenter og semantisk søgning.</p></div>
 
   <?php else: ?>
     <!-- BOT ADMINISTRATION -->
