@@ -8,10 +8,13 @@ use Core\Database;
 
 final class RagService {
     
+    /**
+     * Search relevant document chunks and format them with precise citations.
+     */
     public static function searchRelevantContext(string $query, int $userRoleId): string {
         $db = Database::getConnection();
         
-        // Find documents accessible by user's role (where min_role_id <= userRoleId)
+        // Find documents accessible by user's role
         $stmt = $db->prepare("
             SELECT id, title, filename, extracted_content 
             FROM rag_documents 
@@ -26,36 +29,51 @@ final class RagService {
             return '';
         }
 
-        $context = "\n\n--- START INTERN VIDENSBASE (RAG KILDER) ---\n";
+        $context = "
+
+--- START INTERN VIDENSBASE (RAG KILDER MED CITERING) ---\n";
         $hasMatch = false;
 
         $queryLower = mb_strtolower($query);
         $keywords = array_filter(explode(' ', $queryLower), fn($w) => mb_strlen($w) > 3);
 
         foreach ($docs as $doc) {
-            $contentLower = mb_strtolower($doc['extracted_content']);
-            $score = 0;
-            foreach ($keywords as $kw) {
-                if (str_contains($contentLower, $kw)) {
-                    $score++;
-                }
-            }
+            $content = $doc['extracted_content'];
+            $contentLower = mb_strtolower($content);
+            
+            // Chunking: split content into chunks of ~500 characters
+            $chunks = mb_split('\n\s*\n', $content) ?: [$content];
+            foreach ($chunks as $index => $chunk) {
+                $chunk = trim($chunk);
+                if (mb_strlen($chunk) < 20) continue;
 
-            // If keywords match or we just include recent docs if query is short
-            if ($score > 0 || count($keywords) === 0) {
-                $hasMatch = true;
-                $snippet = mb_substr($doc['extracted_content'], 0, 1000);
-                $context .= sprintf(
-                    "[Kilde ID: %d | Titel: %s | Fil: %s]\n%s...\n\n",
-                    $doc['id'],
-                    $doc['title'],
-                    $doc['filename'],
-                    $snippet
-                );
+                $score = 0;
+                $chunkLower = mb_strtolower($chunk);
+                foreach ($keywords as $kw) {
+                    if (str_contains($chunkLower, $kw)) {
+                        $score++;
+                    }
+                }
+
+                if ($score > 0 || count($keywords) === 0) {
+                    $hasMatch = true;
+                    $snippet = mb_substr($chunk, 0, 600);
+                    $context += sprintf(
+                        "[Kilde: %s | Afsnit %d]
+%s
+
+",
+                        $doc['title'] ?? $doc['filename'],
+                        $index + 1,
+                        $snippet
+                    );
+                    break; // Take best matching chunk per doc
+                }
             }
         }
 
-        $context .= "--- SLUT INTERN VIDENSBASE ---\n\n";
+        $context .= "--- SLUT INTERN VIDENSBASE ---\n
+";
         return $hasMatch ? $context : '';
     }
 
@@ -64,7 +82,6 @@ final class RagService {
             $db = Database::getConnection();
             $total = $promptTokens + $completionTokens;
             
-            // Cost calculation estimates per 1M tokens (e.g., Claude 3.5 Sonnet / GPT-4o / Gemini Pro)
             $costPer1kPrompt = 0.003; 
             $costPer1kCompletion = 0.015;
             if (str_contains(strtolower($modelName), 'gemini')) {
@@ -80,7 +97,7 @@ final class RagService {
             ");
             $stmt->execute([$userId, $botId, $modelName, $promptTokens, $completionTokens, $total, $cost]);
         } catch (\Throwable $e) {
-            // Silent fail for logging to not block main chat flow
+            // Silent fail
         }
     }
 }
