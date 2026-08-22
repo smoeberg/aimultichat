@@ -552,7 +552,7 @@ function toggleProviderFields(selectElem, prefix) {
       </tbody>
     </table>
 
-  <?php <?php elseif ($activeTab === 'analytics'): ?>
+  <?php elseif ($activeTab === 'analytics'): ?>
     <h2>📊 Forbrug & Cost Oversigt</h2>
     <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
       Realtids-statistik over forbrug, antal beskeder, aktive brugere og estimerede AI-omkostninger.
